@@ -1,0 +1,6 @@
+{
+  "name": "TDA Argentina TV",
+  "description": "Aplicación móvil web para visualizar canales de la Televisión Digital Abierta y cable de Argentina, optimizado con backend Node.js para streaming en vivo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
