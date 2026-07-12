@@ -18,16 +18,16 @@ const channelCache: Record<string, CacheEntry> = {};
 
 // Fallback video IDs for demo purposes when API quota is exceeded or key is invalid
 const FALLBACK_VIDEOS: Record<string, string> = {
-  "tv-publica": "cb12KmMMDJA", // Reusing a working live for demo if needed
-  "eltrece": "cb12KmMMDJA",
-  "elnueve": "cb12KmMMDJA",
-  "americatv": "cb12KmMMDJA",
-  "telefe": "XhAYcYpPzTc", 
+  "tv-publica": "eQhhPVzs6qM", // Reusing a working live for demo if needed
+  "eltrece": "nndzeKDSjuc",
+  "elnueve": "C1DhpJ07ZuE",
+  "americatv": "Vh8xmLBJtR8",
+  "telefe": "5ABLiIbQchA",
   "tn": "cb12KmMMDJA",
-  "c5n": "c-wG7Qn5fJc",
-  "ln-mas": "cb12KmMMDJA",
-  "a24": "cb12KmMMDJA",
-  "cronica": "cb12KmMMDJA",
+  "c5n": "xWG-47NFsTg",
+  "ln-mas": "FEWZjXJ7M0c",
+  "a24": "ArKbAx1K-2U",
+  "cronica": "hw4uHyct4vg",
   "canal26": "cb12KmMMDJA",
   "ip-noticias": "cb12KmMMDJA",
   "el-tres-rosario": "cb12KmMMDJA",
