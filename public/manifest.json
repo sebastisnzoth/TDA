@@ -1,0 +1,83 @@
+{
+  "name": "TDA Argentina - Televisión Abierta Digital",
+  "short_name": "TDA Vivo",
+  "description": "Canales de televisión abierta y TDA de Argentina en vivo con guía de programación (EPG) interactiva.",
+  "id": "/index.html",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "orientation": "portrait-primary",
+  "categories": [
+    "entertainment",
+    "utilities",
+    "news"
+  ],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Canales de Aire",
+      "short_name": "Aire",
+      "description": "Ver canales abiertos nacionales",
+      "url": "/?category=aire",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Señales de Noticias",
+      "short_name": "Noticias",
+      "description": "Ver canales de noticias las 24hs",
+      "url": "/?category=noticias",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Canales del Interior",
+      "short_name": "Interior",
+      "description": "Ver señales provinciales y regionales",
+      "url": "/?category=interior",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
+}
