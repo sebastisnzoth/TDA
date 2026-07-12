@@ -743,18 +743,6 @@ export default function App() {
                   </div>
               </div>
 
-              {/* Server Console Output (Logs) */}
-              <div className="p-4 border-b border-slate-800 flex flex-col h-48 bg-black/50">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Logs de Servidor Express</span>
-                  <div className="flex-grow font-mono text-[10px] text-emerald-400 space-y-1 overflow-y-auto pr-1 flex flex-col">
-                      {logs.map((log, i) => (
-                          <div key={i} className="hover:bg-slate-900/60 py-0.5" dangerouslySetInnerHTML={{ __html: log }} />
-                      ))}
-                      {/* Auto scroll anchor */}
-                      <div ref={el => el?.scrollIntoView()} />
-                  </div>
-              </div>
-
               {/* Live JSON Response Inspector */}
               <div className="p-4 bg-slate-950 flex-grow">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Respuesta JSON de la API</span>

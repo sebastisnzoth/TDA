@@ -22,7 +22,7 @@ const FALLBACK_VIDEOS: Record<string, string> = {
   "eltrece": "cb12KmMMDJA",
   "elnueve": "cb12KmMMDJA",
   "americatv": "cb12KmMMDJA",
-  "telefe": "cb12KmMMDJA", 
+  "telefe": "XhAYcYpPzTc", 
   "tn": "cb12KmMMDJA",
   "c5n": "c-wG7Qn5fJc",
   "ln-mas": "cb12KmMMDJA",
