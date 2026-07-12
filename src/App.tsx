@@ -739,6 +739,45 @@ export default function App() {
   const [iptvUrl, setIptvUrl] = useState('');
   const [iptvRawText, setIptvRawText] = useState('');
   const [isIptvLoading, setIsIptvLoading] = useState(false);
+  const [iptvImportTab, setIptvImportTab] = useState<'file' | 'url' | 'raw'>('file');
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState('');
+
+  const handleFileLoad = (file: File) => {
+    if (!file) return;
+    
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (extension !== 'm3u' && extension !== 'm3u8' && extension !== 'txt') {
+      showToast("Subí un archivo .m3u, .m3u8 o .txt válido");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) {
+        showToast("El archivo seleccionado está vacío");
+        return;
+      }
+      setIptvRawText(text);
+      setUploadedFileName(file.name);
+      
+      if (!iptvName.trim()) {
+        const cleanName = file.name
+          .replace(/\.[^/.]+$/, "")
+          .replace(/[-_]/g, " ")
+          .replace(/\b\w/g, c => c.toUpperCase());
+        setIptvName(cleanName);
+      }
+      
+      showToast(`¡Archivo "${file.name}" cargado!`);
+      addLog(`[IPTV FILE] Archivo "${file.name}" cargado y procesado localmente.`);
+    };
+    reader.onerror = () => {
+      showToast("Error al leer el archivo");
+    };
+    reader.readAsText(file);
+  };
 
   // Memoized all channels joining built-in and custom IPTV channels
   const allChannels = React.useMemo(() => {
@@ -879,6 +918,7 @@ export default function App() {
       setIptvName('');
       setIptvUrl('');
       setIptvRawText('');
+      setUploadedFileName('');
       setIsIptvModalOpen(false);
       setSelectedCategory('iptv');
     } catch (err: any) {
@@ -1001,6 +1041,7 @@ https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
 https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8
 #EXTINF:-1 tvg-logo="https://raw.githubusercontent.com/LaPlatita/TDA-IPTV/main/logos/depor-tv.png" group-title="Deportes",DeporTV (Demo BipBop)
 https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
+    setIptvImportTab('raw');
     showToast("Campos rellenados con lista de demostración");
   };
 
@@ -1815,46 +1856,177 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                           </div>
 
                           {/* Playlist URL Input */}
-                          <div>
-                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">URL de la Lista (M3U)</label>
-                              <div className="relative">
-                                  <input 
-                                      type="url" 
-                                      value={iptvUrl}
-                                      onChange={(e) => {
-                                          setIptvUrl(e.target.value);
-                                          if(e.target.value) setIptvRawText(''); // clear raw text if URL is used
-                                      }}
-                                      disabled={!!iptvRawText}
-                                      placeholder="https://example.com/lista-canales.m3u" 
-                                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                  <i className="fa-solid fa-link absolute left-4 top-3.5 text-slate-600 text-xs"></i>
-                              </div>
-                              <p className="text-[10px] text-slate-500 mt-1">El servidor actuará de proxy seguro para saltear bloqueos de seguridad de CORS.</p>
-                          </div>
-
-                          <div className="relative flex py-2 items-center">
-                              <div className="flex-grow border-t border-slate-800"></div>
-                              <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">O Pegá el Contenido</span>
-                              <div className="flex-grow border-t border-slate-800"></div>
-                          </div>
-
-                          {/* Raw M3U Paste Input */}
-                          <div>
-                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Código M3U Formateado</label>
-                              <textarea 
-                                  value={iptvRawText}
-                                  onChange={(e) => {
-                                      setIptvRawText(e.target.value);
-                                      if(e.target.value) setIptvUrl(''); // clear URL if text is pasted
+                          {/* Segmented Import Method Tab Selector */}
+                          <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-850/60">
+                              <button 
+                                  type="button"
+                                  onClick={() => {
+                                      setIptvImportTab('file');
+                                      setIptvUrl('');
                                   }}
-                                  disabled={!!iptvUrl}
-                                  rows={5}
-                                  placeholder={`#EXTM3U\n#EXTINF:-1 tvg-logo="https://..." group-title="Aire",Canal Ejemplo\nhttps://example.com/live.m3u8`} 
-                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-mono text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
+                                  className={cn(
+                                      "flex-1 py-1.5 text-center text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5",
+                                      iptvImportTab === 'file' 
+                                          ? "bg-purple-600 text-white shadow" 
+                                          : "text-slate-400 hover:text-slate-200"
+                                  )}
+                              >
+                                  <i className="fa-solid fa-file-arrow-up text-[10px]"></i>
+                                  Subir Archivo
+                              </button>
+                              <button 
+                                  type="button"
+                                  onClick={() => {
+                                      setIptvImportTab('url');
+                                      setIptvRawText('');
+                                      setUploadedFileName('');
+                                  }}
+                                  className={cn(
+                                      "flex-1 py-1.5 text-center text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5",
+                                      iptvImportTab === 'url' 
+                                          ? "bg-purple-600 text-white shadow" 
+                                          : "text-slate-400 hover:text-slate-200"
+                                  )}
+                              >
+                                  <i className="fa-solid fa-link text-[10px]"></i>
+                                  Enlace URL
+                              </button>
+                              <button 
+                                  type="button"
+                                  onClick={() => {
+                                      setIptvImportTab('raw');
+                                      setIptvUrl('');
+                                      setUploadedFileName('');
+                                  }}
+                                  className={cn(
+                                      "flex-1 py-1.5 text-center text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5",
+                                      iptvImportTab === 'raw' 
+                                          ? "bg-purple-600 text-white shadow" 
+                                          : "text-slate-400 hover:text-slate-200"
+                                  )}
+                              >
+                                  <i className="fa-solid fa-code text-[10px]"></i>
+                                  Pegar M3U
+                              </button>
                           </div>
+
+                          {/* Dynamic Tab Content: File Dropzone */}
+                          {iptvImportTab === 'file' && (
+                              <div className="space-y-2">
+                                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Cargar Lista (.m3u, .m3u8, .txt)</label>
+                                  
+                                  {uploadedFileName ? (
+                                      <div className="border border-emerald-500/35 bg-emerald-500/5 rounded-xl p-4 flex items-center justify-between animate-in fade-in duration-200">
+                                          <div className="flex items-center gap-3 min-w-0">
+                                              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
+                                                  <i className="fa-solid fa-file-video text-lg"></i>
+                                              </div>
+                                              <div className="min-w-0">
+                                                  <span className="text-xs font-bold text-slate-200 block truncate max-w-[280px]">{uploadedFileName}</span>
+                                                  <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-wider block">Lista cargada localmente</span>
+                                              </div>
+                                          </div>
+                                          <button 
+                                              type="button" 
+                                              onClick={() => { 
+                                                  setUploadedFileName(''); 
+                                                  setIptvRawText(''); 
+                                                  showToast("Archivo removido");
+                                              }} 
+                                              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 flex items-center justify-center transition-all shrink-0"
+                                              title="Remover archivo"
+                                          >
+                                              <i className="fa-solid fa-trash-can text-xs"></i>
+                                          </button>
+                                      </div>
+                                  ) : (
+                                      <div 
+                                          onDragOver={(e) => {
+                                              e.preventDefault();
+                                              setIsDragging(true);
+                                          }}
+                                          onDragLeave={() => setIsDragging(false)}
+                                          onDrop={(e) => {
+                                              e.preventDefault();
+                                              setIsDragging(false);
+                                              if (e.dataTransfer.files?.[0]) {
+                                                  handleFileLoad(e.dataTransfer.files[0]);
+                                              }
+                                          }}
+                                          onClick={() => {
+                                              const fileInput = document.getElementById('iptv-file-input');
+                                              if (fileInput) fileInput.click();
+                                          }}
+                                          className={cn(
+                                              "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer group flex flex-col items-center justify-center gap-2 transition-all duration-200 min-h-[140px]",
+                                              isDragging 
+                                                  ? "border-purple-500 bg-purple-500/10 scale-[0.99]" 
+                                                  : "border-slate-800 bg-slate-950/40 hover:border-purple-500/40 hover:bg-slate-950/80"
+                                          )}
+                                      >
+                                          <input 
+                                              id="iptv-file-input"
+                                              type="file" 
+                                              accept=".m3u,.m3u8,.txt" 
+                                              className="hidden" 
+                                              onChange={(e) => { 
+                                                  if (e.target.files?.[0]) handleFileLoad(e.target.files[0]); 
+                                              }} 
+                                          />
+                                          <div className="w-11 h-11 rounded-full bg-slate-900 flex items-center justify-center text-slate-500 group-hover:text-purple-400 group-hover:scale-110 group-hover:bg-purple-950/20 transition-all duration-200 shadow-inner">
+                                              <i className="fa-solid fa-file-arrow-up text-lg"></i>
+                                          </div>
+                                          <div className="space-y-0.5">
+                                              <span className="text-xs font-bold text-slate-300 block">Arrastrá tu archivo aquí</span>
+                                              <span className="text-[10px] text-slate-500 font-semibold block">o hacé clic para explorar carpetas</span>
+                                          </div>
+                                          <span className="text-[8px] bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-slate-400 font-mono font-bold tracking-wider">
+                                              SOPORTA .M3U / .M3U8 / .TXT
+                                          </span>
+                                      </div>
+                                  )}
+                              </div>
+                          )}
+
+                          {/* Dynamic Tab Content: URL Input */}
+                          {iptvImportTab === 'url' && (
+                              <div className="animate-in fade-in duration-200">
+                                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">URL de la Lista (M3U)</label>
+                                  <div className="relative">
+                                      <input 
+                                          type="url" 
+                                          value={iptvUrl}
+                                          onChange={(e) => {
+                                              setIptvUrl(e.target.value);
+                                              if(e.target.value) setIptvRawText('');
+                                          }}
+                                          required={iptvImportTab === 'url'}
+                                          placeholder="https://example.com/lista-canales.m3u" 
+                                          className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors"
+                                      />
+                                      <i className="fa-solid fa-link absolute left-4 top-3.5 text-slate-600 text-xs"></i>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 mt-1">El servidor actuará de proxy seguro para saltear bloqueos de seguridad de CORS.</p>
+                              </div>
+                          )}
+
+                          {/* Dynamic Tab Content: Raw Code Paste Area */}
+                          {iptvImportTab === 'raw' && (
+                              <div className="animate-in fade-in duration-200">
+                                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Código M3U Formateado</label>
+                                  <textarea 
+                                      value={iptvRawText}
+                                      onChange={(e) => {
+                                          setIptvRawText(e.target.value);
+                                          if(e.target.value) setIptvUrl('');
+                                      }}
+                                      required={iptvImportTab === 'raw'}
+                                      rows={6}
+                                      placeholder={`#EXTM3U\n#EXTINF:-1 tvg-logo="https://..." group-title="Aire",Canal Ejemplo\nhttps://example.com/live.m3u8`} 
+                                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-mono text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors"
+                                  />
+                              </div>
+                          )}
                       </div>
 
                       {/* Modal Footer Controls */}
