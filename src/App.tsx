@@ -2,6 +2,26 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import ReactPlayer from 'react-player';
+
+const Player = ReactPlayer as any;
+
+interface IptvChannel {
+  id: string;
+  name: string;
+  streamUrl: string;
+  logoUrl?: string;
+  category: string;
+  group: string;
+}
+
+interface IptvPlaylist {
+  id: string;
+  name: string;
+  url?: string;
+  channelsCount: number;
+  channels: IptvChannel[];
+}
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -265,6 +285,39 @@ export default function App() {
   const serverCache = useRef<Record<string, { timestamp: number; data: any }>>({});
   const CACHE_LIFETIME = 300 * 1000;
 
+  // IPTV custom lists state
+  const [iptvPlaylists, setIptvPlaylists] = useState<IptvPlaylist[]>(() => {
+    const saved = localStorage.getItem('tda_iptv_playlists');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [isIptvModalOpen, setIsIptvModalOpen] = useState(false);
+  const [iptvName, setIptvName] = useState('');
+  const [iptvUrl, setIptvUrl] = useState('');
+  const [iptvRawText, setIptvRawText] = useState('');
+  const [isIptvLoading, setIsIptvLoading] = useState(false);
+
+  // Memoized all channels joining built-in and custom IPTV channels
+  const allChannels = React.useMemo(() => {
+    const customChannels = iptvPlaylists.flatMap(playlist => 
+      playlist.channels.map(ch => ({
+        id: ch.id,
+        name: ch.name,
+        category: 'iptv',
+        channelId: '', 
+        online: true,
+        logoBg: 'bg-slate-950',
+        logoHtml: ch.logoUrl 
+          ? `<img src="${ch.logoUrl}" class="w-full h-full object-contain rounded-lg" referrerPolicy="no-referrer" />` 
+          : `<div class="flex flex-col items-center justify-center text-purple-400 font-bold text-[10px] w-full h-full"><i class="fa-solid fa-play text-purple-500 mb-0.5 text-xs"></i>IPTV</div>`,
+        currentShow: ch.group || 'Canal IPTV',
+        region: playlist.name,
+        viewerCount: Math.floor(Math.random() * 2000) + 100,
+        streamUrl: ch.streamUrl
+      }))
+    );
+    return [...channels, ...customChannels];
+  }, [channels, iptvPlaylists]);
+
   useEffect(() => {
     const saved = localStorage.getItem('tda_favs');
     if (saved) setFavorites(JSON.parse(saved));
@@ -274,6 +327,238 @@ export default function App() {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const parseM3u = (text: string): { name: string; streamUrl: string; logoUrl?: string; group: string }[] => {
+    const lines = text.split('\n');
+    const channelsList: { name: string; streamUrl: string; logoUrl?: string; group: string }[] = [];
+    
+    let currentInfo: { name: string; logoUrl?: string; group: string } | null = null;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      if (line.startsWith('#EXTINF:')) {
+        let logoUrl = '';
+        let group = 'IPTV General';
+        let name = 'Canal IPTV';
+        
+        const logoMatch = line.match(/tvg-logo="([^"]+)"/) || line.match(/logo="([^"]+)"/);
+        if (logoMatch) logoUrl = logoMatch[1];
+        
+        const groupMatch = line.match(/group-title="([^"]+)"/);
+        if (groupMatch) group = groupMatch[1];
+        
+        const commaIndex = line.lastIndexOf(',');
+        if (commaIndex !== -1) {
+          name = line.substring(commaIndex + 1).trim();
+        }
+        
+        currentInfo = { name, logoUrl, group };
+      } else if (line.startsWith('http://') || line.startsWith('https://') || line.startsWith('rtmp://')) {
+        if (currentInfo) {
+          channelsList.push({
+            name: currentInfo.name,
+            streamUrl: line,
+            logoUrl: currentInfo.logoUrl,
+            group: currentInfo.group
+          });
+          currentInfo = null;
+        } else {
+          channelsList.push({
+            name: `Stream ${channelsList.length + 1}`,
+            streamUrl: line,
+            group: 'IPTV General'
+          });
+        }
+      }
+    }
+    return channelsList;
+  };
+
+  const handleImportIptv = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!iptvName.trim()) {
+      showToast("Ingresá un nombre para la lista");
+      return;
+    }
+    
+    let m3uText = '';
+    setIsIptvLoading(true);
+    
+    try {
+      if (iptvUrl.trim()) {
+        addLog(`[IPTV IMPORT] Descargando lista desde ${iptvUrl}...`);
+        const res = await axios.get(`/api/iptv/proxy?url=${encodeURIComponent(iptvUrl.trim())}`);
+        m3uText = res.data;
+      } else if (iptvRawText.trim()) {
+        addLog(`[IPTV IMPORT] Procesando texto raw de M3U pasteado...`);
+        m3uText = iptvRawText;
+      } else {
+        showToast("Ingresá una URL o pegá el contenido de la lista");
+        setIsIptvLoading(false);
+        return;
+      }
+      
+      const parsedChannels = parseM3u(m3uText);
+      if (parsedChannels.length === 0) {
+        showToast("No se encontraron canales válidos en el archivo M3U");
+        setIsIptvLoading(false);
+        return;
+      }
+      
+      const playlistId = `playlist-${Date.now()}`;
+      const newPlaylist: IptvPlaylist = {
+        id: playlistId,
+        name: iptvName.trim(),
+        url: iptvUrl.trim() || undefined,
+        channelsCount: parsedChannels.length,
+        channels: parsedChannels.map((ch, index) => ({
+          id: `iptv-${playlistId}-${index}`,
+          name: ch.name,
+          streamUrl: ch.streamUrl,
+          logoUrl: ch.logoUrl,
+          category: 'iptv',
+          group: ch.group
+        }))
+      };
+      
+      setIptvPlaylists(prev => {
+        const updated = [...prev, newPlaylist];
+        localStorage.setItem('tda_iptv_playlists', JSON.stringify(updated));
+        return updated;
+      });
+      
+      showToast(`¡Lista "${iptvName}" importada con ${parsedChannels.length} canales!`);
+      addLog(`[SUCCESS] Lista IPTV "${iptvName}" importada correctamente con ${parsedChannels.length} señales.`);
+      
+      setIptvName('');
+      setIptvUrl('');
+      setIptvRawText('');
+      setIsIptvModalOpen(false);
+      setSelectedCategory('iptv');
+    } catch (err: any) {
+      console.error(err);
+      showToast(`Error al importar: ${err.message || 'Error desconocido'}`);
+      addLog(`[ERROR] Falló la importación de lista IPTV: ${err.message}`);
+    } finally {
+      setIsIptvLoading(false);
+    }
+  };
+
+  const handleDeletePlaylist = (playlistId: string, name: string) => {
+    if (confirm(`¿Estás seguro de que querés eliminar la lista IPTV "${name}"?`)) {
+      setIptvPlaylists(prev => {
+        const updated = prev.filter(p => p.id !== playlistId);
+        localStorage.setItem('tda_iptv_playlists', JSON.stringify(updated));
+        return updated;
+      });
+      showToast(`Lista "${name}" eliminada`);
+      addLog(`[SYSTEM] Lista IPTV "${name}" eliminada del almacenamiento local.`);
+    }
+  };
+
+  const PRESET_LISTS = [
+    {
+      name: "Argentina Gist M3U",
+      url: "https://gist.githubusercontent.com/frantdse/f6989518c73826ade6734c63c367af4c/raw/",
+      desc: "Excelente lista curada por la comunidad con señales nacionales, aire y TDA.",
+      badge: "Comunidad / TDA"
+    },
+    {
+      name: "Argentina ASTRA (Opción 1)",
+      url: "http://149.107.251.5:8000/playlist.m3u?hls",
+      desc: "Servidor Astra IPTV activo con señales estables HLS de aire.",
+      badge: "Astra #1"
+    },
+    {
+      name: "Argentina ASTRA (Opción 2)",
+      url: "http://181.119.215.61:8000/playlist.m3u?hls",
+      desc: "Servidor Astra IPTV alternativo con señales locales de Argentina.",
+      badge: "Astra #2"
+    },
+    {
+      name: "Argentina ASTRA (Opción 3)",
+      url: "http://181.233.180.4:8000/playlist.m3u?hls",
+      desc: "Servidor Astra IPTV con foco en señales del interior y deportes.",
+      badge: "Astra #3"
+    }
+  ];
+
+  const importPresetIptv = async (name: string, url: string) => {
+    setIsIptvLoading(true);
+    setIsIptvModalOpen(true);
+    setIptvName(name);
+    setIptvUrl(url);
+    setIptvRawText('');
+    addLog(`[IPTV PRESET] Iniciando importación de lista preestablecida "${name}"...`);
+    
+    try {
+      addLog(`[IPTV PRESET] Descargando desde ${url}...`);
+      const res = await axios.get(`/api/iptv/proxy?url=${encodeURIComponent(url.trim())}`);
+      const m3uText = res.data;
+      
+      const parsedChannels = parseM3u(m3uText);
+      if (parsedChannels.length === 0) {
+        showToast("No se encontraron canales válidos en el archivo M3U");
+        setIsIptvLoading(false);
+        return;
+      }
+      
+      const playlistId = `playlist-${Date.now()}`;
+      const newPlaylist: IptvPlaylist = {
+        id: playlistId,
+        name: name,
+        url: url,
+        channelsCount: parsedChannels.length,
+        channels: parsedChannels.map((ch, index) => ({
+          id: `iptv-${playlistId}-${index}`,
+          name: ch.name,
+          streamUrl: ch.streamUrl,
+          logoUrl: ch.logoUrl,
+          category: 'iptv',
+          group: ch.group
+        }))
+      };
+      
+      setIptvPlaylists(prev => {
+        const updated = [...prev, newPlaylist];
+        localStorage.setItem('tda_iptv_playlists', JSON.stringify(updated));
+        return updated;
+      });
+      
+      showToast(`¡Lista "${name}" importada con ${parsedChannels.length} canales!`);
+      addLog(`[SUCCESS] Lista IPTV "${name}" importada correctamente con ${parsedChannels.length} señales.`);
+      
+      setIptvName('');
+      setIptvUrl('');
+      setIptvRawText('');
+      setIsIptvModalOpen(false);
+      setSelectedCategory('iptv');
+    } catch (err: any) {
+      console.error(err);
+      showToast(`Error al importar: ${err.message || 'Error desconocido'}`);
+      addLog(`[ERROR] Falló la importación preestablecida de IPTV: ${err.message}`);
+    } finally {
+      setIsIptvLoading(false);
+    }
+  };
+
+  const loadDemoPlaylist = () => {
+    setIptvName("Argentina IPTV Demo");
+    setIptvRawText(`#EXTM3U
+#EXTINF:-1 tvg-logo="https://raw.githubusercontent.com/LaPlatita/TDA-IPTV/main/logos/c26.png" group-title="Noticias",Canal 26 HD
+https://rtmp.canal26.com/live/canal26.m3u8
+#EXTINF:-1 tvg-logo="https://raw.githubusercontent.com/LaPlatita/TDA-IPTV/main/logos/telemax.png" group-title="Entretenimiento",Telemax HD
+https://rtmp.canal26.com/live/telemax.m3u8
+#EXTINF:-1 tvg-logo="https://raw.githubusercontent.com/LaPlatita/TDA-IPTV/main/logos/construir.png" group-title="TDA",Construir TV (Demo Mux)
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-logo="https://raw.githubusercontent.com/LaPlatita/TDA-IPTV/main/logos/encuentro.png" group-title="Cultura",Canal Encuentro (Demo Akamai)
+https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8
+#EXTINF:-1 tvg-logo="https://raw.githubusercontent.com/LaPlatita/TDA-IPTV/main/logos/depor-tv.png" group-title="Deportes",DeporTV (Demo BipBop)
+https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
+    showToast("Campos rellenados con lista de demostración");
+  };
 
   const handleAskAI = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -305,15 +590,35 @@ export default function App() {
     setLogs(prev => [...prev, `<span class="text-slate-500">[${time}]</span> ${msg}`]);
   };
 
-  const selectChannel = async (channelId: string) => {
-    const channel = channels.find(c => c.id === channelId);
+  const selectChannel = async (channelId: string, forceRefresh: boolean = false) => {
+    const channel = allChannels.find(c => c.id === channelId);
     if (!channel) return;
 
     setActiveChannelId(channelId);
     setPlayerState('loading');
     setActiveVideoId(null);
+
+    // If it's a custom IPTV channel (possesses a streamUrl directly)
+    if ('streamUrl' in channel && (channel as any).streamUrl) {
+      const streamUrl = (channel as any).streamUrl;
+      addLog(`[IPTV STREAM] Seleccionado canal "${channel.name}". Resolviendo URL de stream...`);
+      setTimeout(() => {
+        setApiResponse({
+          status: "online",
+          streamUrl: streamUrl,
+          title: channel.name,
+          source: `IPTV Playlist: ${channel.region}`,
+          cached: false,
+          serverTime: new Date().toISOString()
+        });
+        setPlayerState('online');
+        addLog(`[SUCCESS] IPTV stream "${channel.name}" cargado de forma interactiva.`);
+      }, 500);
+      return;
+    }
+
     setApiRequestsCount(c => c + 1);
-    addLog(`GET /api/canales/${channel.id} - Petición HTTP recibida.`);
+    addLog(`GET /api/canales/${channel.id}${forceRefresh ? '?refresh=true' : ''} - Petición HTTP recibida.`);
 
     let isCacheHit = false;
     let data;
@@ -321,14 +626,14 @@ export default function App() {
     const cachedItem = serverCache.current[channel.id];
 
     try {
-        if (cachedItem && (now - cachedItem.timestamp < CACHE_LIFETIME)) {
+        if (!forceRefresh && cachedItem && (now - cachedItem.timestamp < CACHE_LIFETIME)) {
             isCacheHit = true;
             setCacheHitsCount(c => c + 1);
             data = cachedItem.data;
             addLog(`[CACHÉ HIT] Datos retornados para ${channel.id}. Expira en ${Math.round((CACHE_LIFETIME - (now - cachedItem.timestamp))/1000)}s.`);
         } else {
             addLog(`[CACHÉ MISS] Solicitando API directo para canal ${channel.id}.`);
-            const res = await axios.get(`/api/canales/${channel.id}`);
+            const res = await axios.get(`/api/canales/${channel.id}${forceRefresh ? '?refresh=true' : ''}`);
             data = res.data;
             serverCache.current[channel.id] = { timestamp: now, data };
         }
@@ -413,7 +718,7 @@ export default function App() {
           showToast("Primero selecciona un canal");
           return;
       }
-      const activeChannel = channels.find(c => c.id === activeChannelId);
+      const activeChannel = allChannels.find(c => c.id === activeChannelId);
       const shareUrl = `${window.location.origin}/share/channel/${activeChannelId}`;
       navigator.clipboard.writeText(shareUrl).then(() => {
           showToast(`¡Enlace copiado! (${activeChannel?.name})`);
@@ -423,11 +728,11 @@ export default function App() {
       });
   };
 
-  let filteredChannels = channels;
+  let filteredChannels = allChannels;
   if (selectedCategory === 'favoritos') {
-      filteredChannels = channels.filter(c => favorites.includes(c.id));
+      filteredChannels = allChannels.filter(c => favorites.includes(c.id));
   } else if (selectedCategory !== 'all') {
-      filteredChannels = channels.filter(c => c.category === selectedCategory);
+      filteredChannels = allChannels.filter(c => c.category === selectedCategory);
   }
   if (searchQuery) {
       filteredChannels = filteredChannels.filter(c => 
@@ -436,7 +741,7 @@ export default function App() {
       );
   }
 
-  const activeChannel = channels.find(c => c.id === activeChannelId);
+  const activeChannel = allChannels.find(c => c.id === activeChannelId);
   const ratio = apiRequestsCount > 0 ? Math.round((cacheHitsCount / apiRequestsCount) * 1000)/10 : 100;
 
   return (
@@ -524,24 +829,46 @@ export default function App() {
                                       : "Elegí cualquier señal de la grilla inferior para iniciar la simulación de streaming en vivo."}
                               </p>
                               {activeChannel && (
-                                  <button onClick={() => selectChannel(activeChannel.id)} className="mt-4 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold transition-all shadow-md inline-flex items-center gap-2">
-                                      <i className="fa-solid fa-rotate-right"></i> Reintentar Conexión
-                                  </button>
+                                  <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                                      <button onClick={() => selectChannel(activeChannel.id)} className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold transition-all shadow-md inline-flex items-center gap-2">
+                                          <i className="fa-solid fa-rotate-right"></i> Reintentar Conexión
+                                      </button>
+                                      <button onClick={() => selectChannel(activeChannel.id, true)} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold transition-all shadow-md inline-flex items-center gap-2">
+                                          <i className="fa-solid fa-bolt"></i> Refresh Stream
+                                      </button>
+                                  </div>
                               )}
                           </div>
                       </div>
 
-                      {/* YouTube Live Player Container */}
-                      <div id="player-iframe-container" className={cn("absolute inset-0 w-full h-full transition-opacity duration-300", playerState === 'online' ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none')}>
-                          {activeVideoId && playerState === 'online' && (
-                              <iframe 
-                                  key={activeVideoId}
-                                  src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&rel=0&showinfo=0`}
-                                  className="w-full h-full absolute top-0 left-0"
-                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                  allowFullScreen
-                                  title="Reproductor de TV en Vivo"
-                              ></iframe>
+                      {/* Live Player Container */}
+                      <div id="player-iframe-container" className={cn("absolute inset-0 w-full h-full transition-opacity duration-300 bg-black", playerState === 'online' ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none')}>
+                          {playerState === 'online' && (
+                              activeChannel && 'streamUrl' in activeChannel && (activeChannel as any).streamUrl ? (
+                                  <Player 
+                                      url={(activeChannel as any).streamUrl}
+                                      playing={true}
+                                      controls={true}
+                                      width="100%"
+                                      height="100%"
+                                      style={{ position: 'absolute', top: 0, left: 0 }}
+                                      onError={(err: any) => {
+                                          console.error("ReactPlayer Error:", err);
+                                          handlePlayerError(err);
+                                      }}
+                                  />
+                              ) : (
+                                  activeVideoId && (
+                                      <iframe 
+                                          key={activeVideoId}
+                                          src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&rel=0&showinfo=0`}
+                                          className="w-full h-full absolute top-0 left-0"
+                                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                          allowFullScreen
+                                          title="Reproductor de TV en Vivo"
+                                      ></iframe>
+                                  )
+                              )
                           )}
                       </div>
 
@@ -645,15 +972,113 @@ export default function App() {
                   <button onClick={() => setSelectedCategory('interior')} className={cn("px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all", selectedCategory === 'interior' ? "bg-sky-500 text-white shadow-md" : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200")}>
                       <i className="fa-solid fa-map-location-dot mr-1.5 text-emerald-500"></i>Provincias / Interior
                   </button>
+                  <button onClick={() => setSelectedCategory('iptv')} className={cn("px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all", selectedCategory === 'iptv' ? "bg-sky-500 text-white shadow-md" : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200")}>
+                      <i className="fa-solid fa-list-ul mr-1.5 text-purple-400"></i>Mis Listas IPTV
+                  </button>
                   <button onClick={() => setSelectedCategory('favoritos')} className={cn("px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all", selectedCategory === 'favoritos' ? "bg-sky-500 text-white shadow-md" : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200")}>
                       <i className="fa-solid fa-star mr-1.5 text-yellow-500"></i>Favoritos 
                       {favorites.length > 0 && <span className="bg-slate-800 text-yellow-400 text-[10px] px-1.5 py-0.5 rounded-full ml-1">{favorites.length}</span>}
                   </button>
               </div>
 
+              {/* IPTV Playlists Management section */}
+              {selectedCategory === 'iptv' && (
+                  <div className="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4 sm:p-5 mb-2">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                          <div>
+                              <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                                  <i className="fa-solid fa-folder-open text-purple-400"></i>
+                                  Administrador de Listas IPTV (.m3u)
+                              </h3>
+                              <p className="text-xs text-slate-400 mt-1">
+                                  Cargá playlists externas desde URL o pegando su código para integrarlas a la grilla y reproducirlas directamente.
+                              </p>
+                          </div>
+                          <button onClick={() => setIsIptvModalOpen(true)} className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md flex items-center gap-2">
+                              <i className="fa-solid fa-plus"></i> Importar Lista M3U
+                          </button>
+                      </div>
+
+                      {iptvPlaylists.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {iptvPlaylists.map(playlist => (
+                                  <div key={playlist.id} className="bg-slate-950 border border-slate-850 p-3.5 rounded-xl flex items-center justify-between group">
+                                      <div className="min-w-0">
+                                          <h4 className="font-bold text-sm text-slate-200 truncate">{playlist.name}</h4>
+                                          <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                                              <span className="bg-purple-950/50 text-purple-400 border border-purple-900/40 px-1.5 py-0.5 rounded">
+                                                  {playlist.channelsCount} señales
+                                              </span>
+                                              {playlist.url ? (
+                                                  <span className="truncate max-w-[150px]" title={playlist.url}>
+                                                      <i className="fa-solid fa-link mr-1"></i>{playlist.url}
+                                                  </span>
+                                              ) : (
+                                                  <span><i className="fa-solid fa-file-code mr-1"></i>Texto Raw</span>
+                                              )}
+                                          </p>
+                                      </div>
+                                      <button onClick={() => handleDeletePlaylist(playlist.id, playlist.name)} className="text-slate-500 hover:text-red-400 p-2 hover:bg-red-500/10 rounded-lg transition-all" title="Eliminar Playlist">
+                                          <i className="fa-regular fa-trash-can"></i>
+                                      </button>
+                                  </div>
+                              ))}
+                          </div>
+                      ) : (
+                          <div className="text-center py-6 bg-slate-950/40 rounded-xl border border-dashed border-slate-800">
+                              <p className="text-xs text-slate-500">No tenés listas IPTV importadas actualmente en el almacenamiento del navegador.</p>
+                              <button onClick={() => setIsIptvModalOpen(true)} className="text-xs font-semibold text-sky-400 hover:text-sky-300 mt-2 inline-flex items-center gap-1.5">
+                                  <i className="fa-solid fa-cloud-arrow-down"></i> Importá una lista de prueba ahora
+                              </button>
+                          </div>
+                      )}
+
+                      {/* Presets Grid */}
+                      <div className="mt-6 pt-5 border-t border-slate-800/40">
+                          <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2 mb-3">
+                              <i className="fa-solid fa-wand-magic-sparkles text-purple-400 animate-pulse"></i>
+                              Listas Recomendadas de Argentina (Un Click para Importar)
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                              {PRESET_LISTS.map((preset) => {
+                                  const alreadyImported = iptvPlaylists.some(p => p.url === preset.url || p.name === preset.name);
+                                  return (
+                                      <div key={preset.name} className="bg-slate-950/40 border border-slate-850 hover:border-slate-800 p-3.5 rounded-xl flex flex-col justify-between transition-all hover:bg-slate-950/70">
+                                          <div>
+                                              <div className="flex justify-between items-start gap-2">
+                                                  <span className="font-bold text-xs text-slate-200">{preset.name}</span>
+                                                  <span className="bg-purple-500/10 text-purple-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-purple-500/20">{preset.badge}</span>
+                                              </div>
+                                              <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">{preset.desc}</p>
+                                          </div>
+                                          <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-900/60 pt-2.5">
+                                              <span className="text-[9px] text-slate-500 font-mono truncate max-w-[120px] sm:max-w-[160px]" title={preset.url}>{preset.url}</span>
+                                              {alreadyImported ? (
+                                                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 shrink-0">
+                                                      <i className="fa-solid fa-circle-check"></i> Importada
+                                                  </span>
+                                              ) : (
+                                                  <button 
+                                                      onClick={() => importPresetIptv(preset.name, preset.url)}
+                                                      className="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/20 hover:border-purple-500 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-1.5 shrink-0"
+                                                  >
+                                                      <i className="fa-solid fa-cloud-arrow-down"></i> Importar
+                                                  </button>
+                                              )}
+                                          </div>
+                                      </div>
+                                  );
+                              })}
+                          </div>
+                      </div>
+                  </div>
+              )}
+
               {/* Grid of Channels */}
               <div>
-                  <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Grilla de Emisores</h3>
+                  <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">
+                      {selectedCategory === 'iptv' ? "Señales IPTV Importadas" : "Grilla de Emisores"}
+                  </h3>
                   
                   {filteredChannels.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -688,9 +1113,27 @@ export default function App() {
                           })}
                       </div>
                   ) : (
-                      <div className="py-12 text-center">
-                          <div className="text-slate-600 text-4xl mb-3"><i className="fa-solid fa-magnifying-glass"></i></div>
-                          <p className="text-sm text-slate-400">No encontramos ningún canal que coincida con tu búsqueda.</p>
+                      <div className="py-12 text-center bg-slate-900/20 rounded-2xl border border-slate-800/50 p-6">
+                          <div className="text-slate-600 text-4xl mb-3">
+                              {selectedCategory === 'iptv' ? (
+                                  <i className="fa-solid fa-tv text-purple-400/40"></i>
+                              ) : (
+                                  <i className="fa-solid fa-magnifying-glass text-slate-700"></i>
+                              )}
+                          </div>
+                          <h4 className="font-bold text-slate-300 text-sm mb-1">
+                              {selectedCategory === 'iptv' ? "No hay canales IPTV importados" : "No encontramos canales"}
+                          </h4>
+                          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                              {selectedCategory === 'iptv' 
+                                  ? "Importá una lista M3U con transmisiones en directo en formato m3u8 o rtmp para expandir tu panel de streaming."
+                                  : "No encontramos ningún canal que coincida con tu búsqueda. Verificá los filtros de categorías superiores."}
+                          </p>
+                          {selectedCategory === 'iptv' && (
+                              <button onClick={() => setIsIptvModalOpen(true)} className="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold transition-all shadow-md">
+                                  Importar Primera Playlist
+                              </button>
+                          )}
                       </div>
                   )}
               </div>
@@ -706,7 +1149,7 @@ export default function App() {
                   </div>
                   
                   <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-                      {channels.slice(0, 8).map((channel, idx) => (
+                      {allChannels.slice(0, 8).map((channel, idx) => (
                           <div key={`epg-${channel.id}`} className="flex items-center gap-3 p-2.5 bg-slate-950/50 rounded-xl border border-slate-850 hover:bg-slate-950 transition-colors">
                               <div className={`w-8 h-8 rounded-lg ${channel.logoBg} flex-shrink-0 flex items-center justify-center p-1 text-[8px]`} dangerouslySetInnerHTML={{ __html: channel.logoHtml }} />
                               <div className="flex-grow min-w-0">
@@ -860,6 +1303,151 @@ export default function App() {
                           </div>
                       </form>
                   </div>
+              </div>
+          </div>
+      )}
+
+      {/* IPTV Playlist Import Modal */}
+      {isIptvModalOpen && (
+          <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-purple-500/30 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                  {/* Modal Header */}
+                  <div className="bg-slate-950 px-5 py-4 border-b border-slate-800 flex justify-between items-center relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-indigo-500"></div>
+                      <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                              <i className="fa-solid fa-cloud-arrow-down text-white text-xs"></i>
+                          </div>
+                          <div>
+                              <h3 className="text-sm font-bold text-slate-100">Importar Lista IPTV (.m3u)</h3>
+                              <p className="text-[10px] text-slate-400">Expandí tu grilla de transmisiones móviles</p>
+                          </div>
+                      </div>
+                      <button onClick={() => setIsIptvModalOpen(false)} className="text-slate-500 hover:text-white transition-colors">
+                          <i className="fa-solid fa-times"></i>
+                      </button>
+                  </div>
+
+                  {/* Modal Body */}
+                  <form onSubmit={handleImportIptv} className="flex flex-col flex-grow overflow-hidden">
+                      <div className="p-5 flex-grow overflow-y-auto space-y-4">
+                           {/* Quick Presets Selection in Modal */}
+                           <div className="bg-purple-950/25 border border-purple-900/40 rounded-xl p-3.5 space-y-2.5">
+                               <span className="flex items-center gap-1.5 text-xs text-purple-200 font-bold">
+                                   <i className="fa-solid fa-wand-magic-sparkles text-purple-400"></i>
+                                   Preajustes / Listas Rápidas de Argentina:
+                               </span>
+                               <div className="flex flex-wrap gap-2">
+                                   <button 
+                                       type="button" 
+                                       onClick={loadDemoPlaylist} 
+                                       className="px-2.5 py-1 bg-slate-850 hover:bg-slate-750 text-slate-200 text-[10px] font-semibold rounded border border-slate-750 transition-all flex items-center gap-1"
+                                   >
+                                       <i className="fa-solid fa-play text-sky-400"></i>Demo Local
+                                   </button>
+                                   {PRESET_LISTS.map((preset) => (
+                                       <button 
+                                           key={`modal-preset-${preset.name}`}
+                                           type="button" 
+                                           onClick={() => {
+                                               setIptvName(preset.name);
+                                               setIptvUrl(preset.url);
+                                               setIptvRawText('');
+                                               showToast(`Rellenado con: ${preset.name}`);
+                                           }} 
+                                           className="px-2.5 py-1 bg-purple-900/40 hover:bg-purple-900/60 text-purple-200 font-semibold rounded text-[10px] border border-purple-500/25 transition-all flex items-center gap-1"
+                                       >
+                                           <i className="fa-solid fa-cloud-arrow-down text-purple-400"></i>
+                                           {preset.name.replace("Argentina ", "")}
+                                       </button>
+                                   ))}
+                               </div>
+                           </div>
+
+                          {/* Playlist Name Input */}
+                          <div>
+                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nombre de la Lista</label>
+                              <input 
+                                  type="text" 
+                                  required
+                                  value={iptvName}
+                                  onChange={(e) => setIptvName(e.target.value)}
+                                  placeholder="Ej: Argentina Deportes, Mi Lista Local, etc." 
+                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors"
+                              />
+                          </div>
+
+                          {/* Playlist URL Input */}
+                          <div>
+                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">URL de la Lista (M3U)</label>
+                              <div className="relative">
+                                  <input 
+                                      type="url" 
+                                      value={iptvUrl}
+                                      onChange={(e) => {
+                                          setIptvUrl(e.target.value);
+                                          if(e.target.value) setIptvRawText(''); // clear raw text if URL is used
+                                      }}
+                                      disabled={!!iptvRawText}
+                                      placeholder="https://example.com/lista-canales.m3u" 
+                                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                  <i className="fa-solid fa-link absolute left-4 top-3.5 text-slate-600 text-xs"></i>
+                              </div>
+                              <p className="text-[10px] text-slate-500 mt-1">El servidor actuará de proxy seguro para saltear bloqueos de seguridad de CORS.</p>
+                          </div>
+
+                          <div className="relative flex py-2 items-center">
+                              <div className="flex-grow border-t border-slate-800"></div>
+                              <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">O Pegá el Contenido</span>
+                              <div className="flex-grow border-t border-slate-800"></div>
+                          </div>
+
+                          {/* Raw M3U Paste Input */}
+                          <div>
+                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Código M3U Formateado</label>
+                              <textarea 
+                                  value={iptvRawText}
+                                  onChange={(e) => {
+                                      setIptvRawText(e.target.value);
+                                      if(e.target.value) setIptvUrl(''); // clear URL if text is pasted
+                                  }}
+                                  disabled={!!iptvUrl}
+                                  rows={5}
+                                  placeholder={`#EXTM3U\n#EXTINF:-1 tvg-logo="https://..." group-title="Aire",Canal Ejemplo\nhttps://example.com/live.m3u8`} 
+                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-mono text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                          </div>
+                      </div>
+
+                      {/* Modal Footer Controls */}
+                      <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-end gap-3">
+                          <button 
+                              type="button" 
+                              onClick={() => setIsIptvModalOpen(false)}
+                              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all"
+                          >
+                              Cancelar
+                          </button>
+                          <button 
+                              type="submit" 
+                              disabled={isIptvLoading || (!iptvUrl.trim() && !iptvRawText.trim()) || !iptvName.trim()}
+                              className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl transition-all shadow-md flex items-center gap-2"
+                          >
+                              {isIptvLoading ? (
+                                  <>
+                                      <i className="fa-solid fa-circle-notch fa-spin"></i>
+                                      <span>Procesando...</span>
+                                  </>
+                              ) : (
+                                  <>
+                                      <i className="fa-solid fa-cloud-arrow-down"></i>
+                                      <span>Importar Lista</span>
+                                  </>
+                              )}
+                          </button>
+                      </div>
+                  </form>
               </div>
           </div>
       )}

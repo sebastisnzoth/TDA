@@ -124,10 +124,11 @@ async function startServer() {
       return res.status(404).json({ error: "Canal no encontrado" });
     }
 
+    const refresh = req.query.refresh === 'true';
     const now = Date.now();
     const cached = channelCache[channelId];
 
-    if (cached && (now - cached.timestamp < CACHE_DURATION_MS)) {
+    if (!refresh && cached && (now - cached.timestamp < CACHE_DURATION_MS)) {
       return res.json(cached.data);
     }
 
@@ -210,6 +211,27 @@ async function startServer() {
   // Endpoint to get all channels info
   app.get("/api/channels-list", (req, res) => {
     res.json(Object.keys(CHANNELS));
+  });
+
+  // Proxy endpoint to fetch external IPTV .m3u playlists without CORS issues
+  app.get("/api/iptv/proxy", async (req, res) => {
+    const url = req.query.url as string;
+    if (!url) {
+      return res.status(400).json({ error: "Falta parámetro 'url'" });
+    }
+    try {
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        },
+        timeout: 10000 // 10s timeout
+      });
+      res.setHeader('Content-Type', 'text/plain');
+      res.send(response.data);
+    } catch (error: any) {
+      console.error(`Error in IPTV proxy for ${url}:`, error.message);
+      res.status(500).json({ error: `No se pudo descargar la lista de canales: ${error.message}` });
+    }
   });
 
   // Vite middleware for development
