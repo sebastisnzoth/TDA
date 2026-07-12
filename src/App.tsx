@@ -6,6 +6,34 @@ import ReactPlayer from 'react-player';
 
 const Player = ReactPlayer as any;
 
+// Patch HTMLMediaElement.prototype.play to handle interruption / AbortError gracefully
+if (typeof window !== 'undefined' && window.HTMLMediaElement) {
+  const originalPlay = window.HTMLMediaElement.prototype.play;
+  window.HTMLMediaElement.prototype.play = function (...args: any[]) {
+    const promise = originalPlay.apply(this, args);
+    if (promise && typeof promise.catch === 'function') {
+      promise.catch((err: any) => {
+        // Prevent unhandled promise rejections for interrupted plays
+        if (err && (err.name === 'AbortError' || String(err.message).includes('interrupted'))) {
+          // Quietly ignore expected play interruptions
+          return;
+        }
+        // For other issues, log them
+        console.warn('HTMLMediaElement.play() was prevented:', err);
+      });
+    }
+    return promise;
+  };
+
+  // Also catch unhandled promise rejections for safety
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    if (reason && (reason.name === 'AbortError' || (reason.message && String(reason.message).includes('interrupted')))) {
+      event.preventDefault();
+    }
+  });
+}
+
 interface IptvChannel {
   id: string;
   name: string;
@@ -255,9 +283,425 @@ const CHANNELS_DATA = [
   }
 ];
 
+function calculateSchedule(idx: number) {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  
+  let slotDuration = 120; // 2 hours in minutes by default
+  if (idx % 3 === 0) {
+    slotDuration = 60; // 1 hour for some
+  } else if (idx % 4 === 0) {
+    slotDuration = 180; // 3 hours for others
+  }
+  
+  const totalMinutes = currentHour * 60 + currentMinute;
+  
+  const offset = (idx * 15) % slotDuration; 
+  let startMinutes = Math.floor((totalMinutes - offset) / slotDuration) * slotDuration + offset;
+  
+  if (startMinutes > totalMinutes) {
+    startMinutes -= slotDuration;
+  }
+  
+  const endMinutes = startMinutes + slotDuration;
+  
+  const formatTime = (minutes: number) => {
+    const mins = (minutes + 1440) % 1440; 
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  };
+  
+  const timeLabel = `${formatTime(startMinutes)} - ${formatTime(endMinutes)}`;
+  
+  const elapsed = totalMinutes - startMinutes;
+  const progress = Math.max(0, Math.min(100, Math.round((elapsed / slotDuration) * 100)));
+  
+  return {
+    timeLabel,
+    progress
+  };
+}
+
+function useEpgSchedule(idx: number) {
+  const [schedule, setSchedule] = useState(() => calculateSchedule(idx));
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSchedule(calculateSchedule(idx));
+    }, 60000); 
+    return () => clearInterval(timer);
+  }, [idx]);
+
+  return schedule;
+}
+
+interface EpgRowProps {
+  channel: any;
+  idx: number;
+  onClick: () => void;
+}
+
+function EpgRow({ channel, idx, onClick }: EpgRowProps) {
+  const schedule = useEpgSchedule(idx);
+  return (
+    <div 
+      onClick={onClick}
+      className="flex items-center gap-3 p-2.5 bg-slate-950/50 rounded-xl border border-slate-850 hover:border-sky-500/50 hover:bg-slate-950/80 transition-all cursor-pointer group active:scale-[0.98]"
+    >
+        <div className={`w-8 h-8 rounded-lg ${channel.logoBg} flex-shrink-0 flex items-center justify-center p-1 text-[8px]`} dangerouslySetInnerHTML={{ __html: channel.logoHtml }} />
+        <div className="flex-grow min-w-0">
+            <div className="flex justify-between items-center mb-1 text-[11px]">
+                <span className="font-bold text-slate-200 group-hover:text-sky-400 transition-colors truncate">{channel.name}</span>
+                <span className="text-sky-500 font-semibold font-mono text-[9px]">{schedule.timeLabel}</span>
+            </div>
+            <p className="text-[10px] text-slate-400 truncate font-semibold mb-1.5">{channel.currentShow}</p>
+            <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                <div className="bg-gradient-to-r from-sky-500 to-blue-500 h-full rounded-full transition-all duration-1000" style={{ width: `${schedule.progress}%` }}></div>
+            </div>
+        </div>
+        <div className="text-slate-600 group-hover:text-sky-400 transition-colors shrink-0 pl-1">
+            <i className="fa-solid fa-chevron-right text-xs"></i>
+        </div>
+    </div>
+  );
+}
+
+function getExtendedProgramDetails(channel: any, idx: number) {
+  const schedule = calculateSchedule(idx);
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const totalMinutes = currentHour * 60 + currentMinute;
+  
+  const times = schedule.timeLabel.split(" - ");
+  const endParts = times[1].split(":");
+  let endHour = parseInt(endParts[0], 10);
+  const endMinute = parseInt(endParts[1], 10);
+  
+  if (endHour < currentHour) {
+    endHour += 24;
+  }
+  const endTotalMinutes = endHour * 60 + endMinute;
+  const remainingMinutes = Math.max(0, endTotalMinutes - totalMinutes);
+
+  const showsDescriptions: Record<string, string> = {
+    "Festival País (En Vivo)": "Transmisión cultural de la TV Pública recorriendo los festivales folclóricos, musicales y tradicionales de cada rincón de la República Argentina.",
+    "Almorzando con Juana": "La clásica mesa de los almuerzos de la televisión argentina con invitados especiales del mundo del espectáculo, política, periodismo y cultura.",
+    "Qué Mañana! con Cala": "Un programa matutino lleno de recetas deliciosas, consejos para el hogar, humor, información del espectáculo y la calidez de siempre.",
+    "Crónica Matinal": "Toda la información del amanecer cordobés con el estilo directo, ágil y comprometido de Canal 10. Con móviles en vivo, reportes de tránsito y opinión.",
+    "Chaco Noticias": "El panorama informativo completo de la provincia del Chaco, con la cobertura federal de Chaco TV, entrevistas a especialistas y análisis político.",
+    "Informativo 7": "La actualidad y los hechos más relevantes de la Patagonia norte. Transmisión de Canal 7 de Chubut desde Rawson para toda la región.",
+    "Telediario": "Noticiero federal e informes especiales del interior argentino. Segmentos de agro, economía regional y análisis de actualidad.",
+    "Noticiero Trece": "El clásico informativo del mediodía con las noticias de último momento, actualidad nacional, internacional, espectáculos y deportes.",
+    "El Noticiero de la Gente": "La información explicada con cercanía, investigaciones especiales y las problemáticas de la comunidad explicadas en vivo por expertos.",
+    "América Noticias": "Análisis en profundidad, debates de actualidad y primicias periodísticas que marcan la agenda política y social del país con destacados columnistas.",
+    "Telenueve": "El noticiero con fuerte presencia vecinal, casos policiales explicados con objetividad, economía familiar y la actualidad del Gran Buenos Aires.",
+    "La Cornisa": "Periodismo de investigación riguroso, entrevistas exclusivas con protagonistas políticos y debates profundos sobre la coyuntura de la República.",
+    "TN Fin de Semana": "La señal líder de noticias en Argentina acompaña tu fin de semana con coberturas federales en directo, móviles en todo el país y lo que hay que saber.",
+    "C5N en Vivo": "La señal nacional de noticias con análisis del panorama político, cobertura económica, opinión calificada y debates de actualidad en vivo.",
+    "LN+ Vivo": "Análisis político de primer nivel con periodistas destacados, entrevistas a fondo y el seguimiento al minuto de las decisiones de gobierno.",
+    "Canal 26 Noticias": "Información al instante de la escena internacional, geopolítica mundial, avances tecnológicos y la actualidad nacional de Argentina.",
+    "A24 Noticias": "El ritmo de la noticia en tiempo real con periodistas con fuerte opinión, investigación de casos del día y cobertura federal rápida."
+  };
+
+  const defaultDesc = `Transmisión en directo del canal ${channel.name}. Contenido local y regional de interés general en alta definición y con bitrate adaptativo para optimizar tu experiencia de streaming offline/online.`;
+  const synopsis = showsDescriptions[channel.currentShow] || defaultDesc;
+
+  const resolution = channel.category === 'iptv' ? "1080p (Stream HLS / MPEG-TS)" : "1080p Full HD (Feed YouTube Live)";
+  const bitrate = channel.category === 'iptv' ? "~2.8 - 4.2 Mbps (Variable)" : "~3.5 Mbps (CBR Stream)";
+  const codec = "H.264 (AVC) / AAC Stereo 48kHz";
+  const source = channel.category === 'iptv' ? `Servidor IPTV / M3U: ${channel.region}` : `Feed Oficial YouTube (${channel.channelId || 'LIVE'})`;
+  const latency = channel.category === 'iptv' ? "6.8s (Segmentación HLS)" : "3.9s (Ultra Low Latency)";
+
+  const startParts = times[0].split(":");
+  const startH = parseInt(startParts[0], 10);
+  const startM = parseInt(startParts[1], 10);
+
+  const getOffsetTime = (h: number, m: number, offsetMins: number) => {
+    const total = h * 60 + m + offsetMins;
+    const finalH = Math.floor(total / 60) % 24;
+    const finalM = total % 60;
+    return `${finalH.toString().padStart(2, '0')}:${finalM.toString().padStart(2, '0')}`;
+  };
+
+  const episodes = [
+    { time: times[0], title: "Apertura y Bloque Informativo Principal", desc: "Resumen de títulos y presentación de los temas que marcarán la transmisión." },
+    { time: getOffsetTime(startH, startM, 20), title: "Móviles en Vivo y Testimonios", desc: "Enlaces satelitales en directo con cronistas informando desde el lugar de los hechos." },
+    { time: getOffsetTime(startH, startM, 50), title: "Entrevista Especial / Mesa de Debate", desc: "Diálogo a fondo con especialistas, funcionarios o figuras destacadas de la jornada." },
+    { time: getOffsetTime(startH, startM, 85), title: "Segmento de Servicios y Agenda Regional", desc: "Pronóstico del tiempo extendido, alertas de tránsito e información de utilidad vecinal." },
+    { time: getOffsetTime(startH, startM, 110), title: "Cierre, Redes y Adelanto de Grilla", desc: "Repaso interactivo de la opinión de la audiencia y avance de la siguiente señal." }
+  ];
+
+  return {
+    synopsis,
+    remainingMinutes,
+    scheduleInfo: schedule,
+    technical: {
+      resolution,
+      bitrate,
+      codec,
+      source,
+      latency
+    },
+    episodes: episodes.slice(0, idx % 2 === 0 ? 4 : 5)
+  };
+}
+
+interface EpgProgramDetailModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  channel: any;
+  idx: number;
+  onPlayChannel: (channelId: string) => void;
+}
+
+function EpgProgramDetailModal({ isOpen, onClose, channel, idx, onPlayChannel }: EpgProgramDetailModalProps) {
+  const [activeTab, setActiveTab] = useState<'info' | 'tech' | 'episodes'>('info');
+  
+  if (!isOpen || !channel) return null;
+
+  const details = getExtendedProgramDetails(channel, idx);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity cursor-pointer"
+        onClick={onClose}
+      />
+      
+      {/* Modal Content */}
+      <div className="relative bg-slate-900 border border-slate-850 rounded-3xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden max-h-[90vh] animate-in fade-in-50 zoom-in-95 duration-150">
+        
+        {/* Header decoration */}
+        <div className="bg-slate-950 px-6 py-4 border-b border-slate-800/80 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-8 h-8 rounded-lg ${channel.logoBg} flex items-center justify-center p-1 text-[8px] shrink-0`} dangerouslySetInnerHTML={{ __html: channel.logoHtml }} />
+            <div className="min-w-0">
+              <span className="text-[10px] text-sky-400 font-bold uppercase tracking-wider font-mono">{channel.region || 'Guía de Señales'}</span>
+              <h3 className="text-sm font-bold text-slate-100 truncate max-w-[280px]">{channel.name}</h3>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-slate-850 hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors shrink-0"
+          >
+            <i className="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+
+        {/* Dynamic Show Card */}
+        <div className="p-6 bg-gradient-to-b from-slate-950/40 to-transparent border-b border-slate-800/50">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <span className="bg-sky-500/10 text-sky-400 text-[10px] px-2.5 py-0.5 rounded-full font-bold border border-sky-500/15 uppercase tracking-wide">
+              En Vivo Ahora
+            </span>
+            <span className="text-xs text-sky-400 font-bold font-mono bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-850/60">
+              {details.scheduleInfo.timeLabel}
+            </span>
+          </div>
+          <h2 className="text-xl font-black text-slate-100 tracking-tight leading-snug">
+            {channel.currentShow}
+          </h2>
+          
+          {/* Progress bar */}
+          <div className="mt-4">
+            <div className="flex justify-between items-center text-[10px] text-slate-400 mb-1.5 font-semibold">
+              <span>Progreso del bloque</span>
+              <span className="font-mono text-sky-400 font-bold">{details.scheduleInfo.progress}%</span>
+            </div>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div className="bg-gradient-to-r from-sky-400 via-sky-500 to-blue-500 h-full rounded-full transition-all duration-1000" style={{ width: `${details.scheduleInfo.progress}%` }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Buttons */}
+        <div className="flex border-b border-slate-800 bg-slate-950/20 px-4">
+          <button 
+            onClick={() => setActiveTab('info')}
+            className={cn(
+              "px-4 py-3 text-xs font-bold transition-all border-b-2",
+              activeTab === 'info' 
+                ? "border-sky-500 text-sky-400 bg-sky-500/5" 
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            )}
+          >
+            <i className="fa-solid fa-circle-info mr-1.5"></i>
+            Sinopsis
+          </button>
+          <button 
+            onClick={() => setActiveTab('tech')}
+            className={cn(
+              "px-4 py-3 text-xs font-bold transition-all border-b-2",
+              activeTab === 'tech' 
+                ? "border-sky-500 text-sky-400 bg-sky-500/5" 
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            )}
+          >
+            <i className="fa-solid fa-sliders mr-1.5"></i>
+            Datos Técnicos
+          </button>
+          <button 
+            onClick={() => setActiveTab('episodes')}
+            className={cn(
+              "px-4 py-3 text-xs font-bold transition-all border-b-2",
+              activeTab === 'episodes' 
+                ? "border-sky-500 text-sky-400 bg-sky-500/5" 
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            )}
+          >
+            <i className="fa-solid fa-list-ul mr-1.5"></i>
+            Segmentos ({details.episodes.length})
+          </button>
+        </div>
+
+        {/* Tab Body */}
+        <div className="p-6 overflow-y-auto flex-grow space-y-4 max-h-[320px]">
+          {activeTab === 'info' && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Sinopsis del Programa</h4>
+                <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                  {details.synopsis}
+                </p>
+              </div>
+
+              <div className="bg-slate-950/50 border border-slate-850 p-4 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
+                    <i className="fa-regular fa-clock text-sm"></i>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Duración Restante</span>
+                    <span className="text-xs font-bold text-slate-200">
+                      {details.remainingMinutes} {details.remainingMinutes === 1 ? 'minuto' : 'minutos'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded font-extrabold uppercase border border-emerald-500/15">
+                    Estable
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'tech' && (
+            <div className="space-y-3.5">
+              <h4 className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-2">Metadatos de Señal de Streaming</h4>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850/60">
+                  <span className="text-[9px] text-slate-500 block uppercase font-bold">Resolución</span>
+                  <span className="text-xs font-bold text-slate-200">{details.technical.resolution}</span>
+                </div>
+                <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850/60">
+                  <span className="text-[9px] text-slate-500 block uppercase font-bold">Bitrate Promedio</span>
+                  <span className="text-xs font-bold text-slate-200">{details.technical.bitrate}</span>
+                </div>
+                <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850/60">
+                  <span className="text-[9px] text-slate-500 block uppercase font-bold">Codec de Video/Audio</span>
+                  <span className="text-xs font-bold text-slate-200">{details.technical.codec}</span>
+                </div>
+                <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850/60">
+                  <span className="text-[9px] text-slate-500 block uppercase font-bold">Latencia Medida</span>
+                  <span className="text-xs font-bold text-slate-200">{details.technical.latency}</span>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850/60">
+                <span className="text-[9px] text-slate-500 block uppercase font-bold mb-0.5">Dirección de Origen</span>
+                <span className="text-xs font-mono text-slate-300 break-all select-all font-medium bg-slate-950 px-2 py-1 rounded block border border-slate-900 mt-1">
+                  {details.technical.source}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'episodes' && (
+            <div className="space-y-4">
+              <h4 className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Estructura del Bloque (Horarios)</h4>
+              
+              <div className="relative border-l-2 border-slate-800 ml-2.5 pl-4 space-y-4 py-1.5">
+                {details.episodes.map((episode, i) => {
+                  const totalEpisodes = details.episodes.length;
+                  const currentThreshold = (details.scheduleInfo.progress / 100) * totalEpisodes;
+                  const isPassed = i < Math.floor(currentThreshold);
+                  const isActive = i === Math.floor(currentThreshold);
+
+                  return (
+                    <div key={`episode-${i}`} className="relative">
+                      {/* Timeline Dot */}
+                      <span className={cn(
+                        "absolute -left-[25px] top-1 w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center transition-all",
+                        isPassed 
+                          ? "bg-sky-500 border-sky-500 text-[8px] text-slate-950 font-bold" 
+                          : isActive 
+                            ? "bg-slate-900 border-sky-400 animate-pulse text-[8px] text-sky-400" 
+                            : "bg-slate-900 border-slate-700"
+                      )}>
+                        {isPassed && <i className="fa-solid fa-check text-[7px]"></i>}
+                        {isActive && <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />}
+                      </span>
+
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "text-xs font-mono font-bold",
+                            isActive ? "text-sky-400" : isPassed ? "text-slate-400" : "text-slate-500"
+                          )}>
+                            {episode.time} hs
+                          </span>
+                          {isActive && (
+                            <span className="bg-sky-400/10 text-sky-400 text-[8px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider animate-pulse">
+                              Actual
+                            </span>
+                          )}
+                        </div>
+                        <h5 className={cn(
+                          "text-xs font-bold mt-0.5",
+                          isActive ? "text-slate-100" : isPassed ? "text-slate-300" : "text-slate-400"
+                        )}>
+                          {episode.title}
+                        </h5>
+                        <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed font-semibold">
+                          {episode.desc}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Action */}
+        <div className="p-6 bg-slate-950 border-t border-slate-800/80 flex gap-3">
+          <button
+            onClick={() => {
+              onPlayChannel(channel.id);
+              onClose();
+            }}
+            className="flex-grow py-3 bg-gradient-to-r from-sky-400 to-blue-500 hover:from-sky-300 hover:to-blue-400 text-slate-950 hover:text-black font-extrabold text-xs rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
+          >
+            <i className="fa-solid fa-circle-play text-sm"></i>
+            Sintonizar Señal en Vivo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [channels, setChannels] = useState(CHANNELS_DATA);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [selectedEpgProgram, setSelectedEpgProgram] = useState<{ channel: any; idx: number } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -1150,19 +1594,12 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                   
                   <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
                       {allChannels.slice(0, 8).map((channel, idx) => (
-                          <div key={`epg-${channel.id}`} className="flex items-center gap-3 p-2.5 bg-slate-950/50 rounded-xl border border-slate-850 hover:bg-slate-950 transition-colors">
-                              <div className={`w-8 h-8 rounded-lg ${channel.logoBg} flex-shrink-0 flex items-center justify-center p-1 text-[8px]`} dangerouslySetInnerHTML={{ __html: channel.logoHtml }} />
-                              <div className="flex-grow min-w-0">
-                                  <div className="flex justify-between items-center mb-1 text-[11px]">
-                                      <span className="font-bold text-slate-200 truncate">{channel.name}</span>
-                                      <span className="text-sky-500 font-semibold font-mono text-[9px]">13:00 - 17:00</span>
-                                  </div>
-                                  <p className="text-[10px] text-slate-400 truncate font-semibold mb-1.5">{channel.currentShow}</p>
-                                  <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                                      <div className="bg-gradient-to-r from-sky-500 to-blue-500 h-full rounded-full" style={{ width: `${10 + (idx * 7) % 80}%` }}></div>
-                                  </div>
-                              </div>
-                          </div>
+                          <EpgRow 
+                              key={`epg-${channel.id}`} 
+                              channel={channel} 
+                              idx={idx} 
+                              onClick={() => setSelectedEpgProgram({ channel, idx })}
+                          />
                       ))}
                   </div>
               </div>
@@ -1450,6 +1887,17 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                   </form>
               </div>
           </div>
+      )}
+
+      {/* Extended EPG Program Details Modal */}
+      {selectedEpgProgram && (
+          <EpgProgramDetailModal 
+              isOpen={!!selectedEpgProgram}
+              onClose={() => setSelectedEpgProgram(null)}
+              channel={selectedEpgProgram.channel}
+              idx={selectedEpgProgram.idx}
+              onPlayChannel={selectChannel}
+          />
       )}
 
       {/* Toast System */}
