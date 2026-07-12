@@ -743,6 +743,15 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState('');
 
+  // IPTV player controls & manual tuner state
+  const [aspectMode, setAspectMode] = useState<'contain' | '4-3' | 'fill' | 'cover'>('contain');
+  const [playerPlaying, setPlayerPlaying] = useState(true);
+  const [playerVolume, setPlayerVolume] = useState(0.8);
+  const [playerMuted, setPlayerMuted] = useState(false);
+  const [selectedIptvGroup, setSelectedIptvGroup] = useState('all');
+  const [quickStreamUrl, setQuickStreamUrl] = useState('');
+  const [quickStreamName, setQuickStreamName] = useState('');
+
   const handleFileLoad = (file: File) => {
     if (!file) return;
     
@@ -795,7 +804,8 @@ export default function App() {
         currentShow: ch.group || 'Canal IPTV',
         region: playlist.name,
         viewerCount: Math.floor(Math.random() * 2000) + 100,
-        streamUrl: ch.streamUrl
+        streamUrl: ch.streamUrl,
+        group: ch.group || 'IPTV General'
       }))
     );
     return [...channels, ...customChannels];
@@ -941,6 +951,56 @@ export default function App() {
       showToast(`Lista "${name}" eliminada`);
       addLog(`[SYSTEM] Lista IPTV "${name}" eliminada del almacenamiento local.`);
     }
+  };
+
+  const playQuickStream = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickStreamUrl.trim()) {
+      showToast("Ingresá una URL de stream válida");
+      return;
+    }
+    const name = quickStreamName.trim() || 'Señal Manual';
+    const playlistId = 'manual-streams-playlist';
+    
+    let manualPlaylist = iptvPlaylists.find(p => p.id === playlistId);
+    if (!manualPlaylist) {
+      manualPlaylist = {
+        id: playlistId,
+        name: 'Sintonizaciones Manuales',
+        channelsCount: 0,
+        channels: []
+      };
+    }
+    
+    const newChannel = {
+      id: `iptv-manual-${Date.now()}`,
+      name,
+      streamUrl: quickStreamUrl.trim(),
+      category: 'iptv',
+      group: 'Sintonizador Manual'
+    };
+    
+    const updatedPlaylist = {
+      ...manualPlaylist,
+      channelsCount: manualPlaylist.channelsCount + 1,
+      channels: [...manualPlaylist.channels, newChannel]
+    };
+    
+    setIptvPlaylists(prev => {
+      const filtered = prev.filter(p => p.id !== playlistId);
+      const updated = [...filtered, updatedPlaylist];
+      localStorage.setItem('tda_iptv_playlists', JSON.stringify(updated));
+      return updated;
+    });
+    
+    setQuickStreamUrl('');
+    setQuickStreamName('');
+    showToast(`¡Señal "${name}" guardada y sintonizada!`);
+    addLog(`[SINTONIZADOR] Guardado stream individual "${name}" en lista manual.`);
+    
+    setTimeout(() => {
+      selectChannel(newChannel.id);
+    }, 150);
   };
 
   const PRESET_LISTS = [
@@ -1215,16 +1275,34 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       });
   };
 
+  // Memoized unique groups for custom IPTV channels
+  const iptvGroups = React.useMemo(() => {
+    const groupsSet = new Set<string>();
+    iptvPlaylists.forEach(playlist => {
+      playlist.channels.forEach(ch => {
+        if (ch.group) groupsSet.add(ch.group);
+      });
+    });
+    return Array.from(groupsSet).sort();
+  }, [iptvPlaylists]);
+
   let filteredChannels = allChannels;
   if (selectedCategory === 'favoritos') {
       filteredChannels = allChannels.filter(c => favorites.includes(c.id));
   } else if (selectedCategory !== 'all') {
       filteredChannels = allChannels.filter(c => c.category === selectedCategory);
   }
+
+  // Extra filter for IPTV group
+  if (selectedCategory === 'iptv' && selectedIptvGroup !== 'all') {
+      filteredChannels = filteredChannels.filter(c => 'group' in c && (c as any).group === selectedIptvGroup);
+  }
+
   if (searchQuery) {
       filteredChannels = filteredChannels.filter(c => 
           c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-          c.region.toLowerCase().includes(searchQuery.toLowerCase())
+          c.region.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          ('group' in c && (c as any).group?.toLowerCase().includes(searchQuery.toLowerCase()))
       );
   }
 
@@ -1334,11 +1412,25 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                               activeChannel && 'streamUrl' in activeChannel && (activeChannel as any).streamUrl ? (
                                   <Player 
                                       url={(activeChannel as any).streamUrl}
-                                      playing={true}
+                                      playing={playerPlaying}
                                       controls={true}
+                                      volume={playerVolume}
+                                      muted={playerMuted}
                                       width="100%"
                                       height="100%"
                                       style={{ position: 'absolute', top: 0, left: 0 }}
+                                      config={{
+                                          file: {
+                                              attributes: {
+                                                  style: {
+                                                      width: '100%',
+                                                      height: '100%',
+                                                      objectFit: aspectMode === 'fill' ? 'fill' : aspectMode === 'cover' ? 'cover' : 'contain'
+                                                  },
+                                                  className: aspectMode === '4-3' ? 'aspect-[4/3] max-w-[75%] mx-auto' : ''
+                                              }
+                                          }
+                                      }}
                                       onError={(err: any) => {
                                           console.error("ReactPlayer Error:", err);
                                           handlePlayerError(err);
@@ -1368,6 +1460,79 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                           <p className="text-xs text-sky-400 mt-4 tracking-widest font-mono">RESOLVIENDO STREAM CACHÉ...</p>
                       </div>
                   </div>
+
+                  {/* IPTV Advanced Controls HUD */}
+                  {playerState === 'online' && activeChannel && 'streamUrl' in activeChannel && (activeChannel as any).streamUrl && (
+                      <div className="bg-slate-950 border-t border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-4 select-none">
+                          {/* Playback Controls */}
+                          <div className="flex items-center gap-3">
+                              <button 
+                                  onClick={() => setPlayerPlaying(!playerPlaying)}
+                                  className="w-9 h-9 rounded-full bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 hover:text-purple-300 border border-purple-500/20 flex items-center justify-center transition-all shadow active:scale-95"
+                                  title={playerPlaying ? "Pausar" : "Reproducir"}
+                              >
+                                  <i className={cn("fa-solid text-sm", playerPlaying ? "fa-pause" : "fa-play pl-0.5")}></i>
+                              </button>
+
+                              <button 
+                                  onClick={() => selectChannel(activeChannel.id)}
+                                  className="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 flex items-center justify-center transition-all shadow active:scale-95"
+                                  title="Recargar señal"
+                              >
+                                  <i className="fa-solid fa-arrows-rotate text-xs"></i>
+                              </button>
+
+                              {/* Volume Controls */}
+                              <div className="flex items-center gap-2 bg-slate-900 border border-slate-850 px-3 py-1 rounded-xl">
+                                  <button 
+                                      onClick={() => setPlayerMuted(!playerMuted)}
+                                      className="text-slate-400 hover:text-slate-200 transition-colors"
+                                      title={playerMuted ? "Activar Sonido" : "Silenciar"}
+                                  >
+                                      <i className={cn("fa-solid text-xs w-4", playerMuted || playerVolume === 0 ? "fa-volume-xmark text-red-400" : playerVolume < 0.4 ? "fa-volume-low" : "fa-volume-high")}></i>
+                                  </button>
+                                  <input 
+                                      type="range"
+                                      min="0"
+                                      max="1"
+                                      step="0.05"
+                                      value={playerMuted ? 0 : playerVolume}
+                                      onChange={(e) => {
+                                          setPlayerVolume(parseFloat(e.target.value));
+                                          if (playerMuted) setPlayerMuted(false);
+                                      }}
+                                      className="w-20 accent-purple-500 h-1 rounded-lg cursor-pointer bg-slate-800"
+                                      title={`Volumen: ${Math.round((playerMuted ? 0 : playerVolume) * 100)}%`}
+                                  />
+                                  <span className="text-[10px] text-slate-500 font-mono font-bold w-6 text-right">
+                                      {Math.round((playerMuted ? 0 : playerVolume) * 100)}%
+                                  </span>
+                              </div>
+                          </div>
+
+                          {/* Aspect Ratio controls */}
+                          <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-850 p-1 rounded-xl">
+                              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-2">Aspecto:</span>
+                              {(['contain', '4-3', 'fill', 'cover'] as const).map((mode) => (
+                                  <button
+                                      key={mode}
+                                      onClick={() => {
+                                          setAspectMode(mode);
+                                          showToast(`Aspecto cambiado a: ${mode === 'contain' ? '16:9 Original' : mode === '4-3' ? '4:3 Clásico' : mode === 'fill' ? 'Estirado (Rellenar)' : 'Expandido (Cover)'}`);
+                                      }}
+                                      className={cn(
+                                          "px-2 py-1 text-[10px] font-bold rounded-lg transition-all",
+                                          aspectMode === mode 
+                                              ? "bg-purple-600 text-white shadow" 
+                                              : "text-slate-400 hover:text-slate-200"
+                                      )}
+                                  >
+                                      {mode === 'contain' ? '16:9' : mode === '4-3' ? '4:3' : mode === 'fill' ? 'Estirar' : 'Expandir'}
+                                  </button>
+                              ))}
+                          </div>
+                      </div>
+                  )}
 
                   {/* Player Control Info bar */}
                   <div className="p-4 bg-slate-900 border-t border-slate-800/60">
@@ -1558,6 +1723,48 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                               })}
                           </div>
                       </div>
+
+                      {/* Sintonizador Manual Form */}
+                      <div className="mt-6 pt-5 border-t border-slate-800/40">
+                          <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2 mb-3">
+                              <i className="fa-solid fa-satellite-dish text-purple-400"></i>
+                              Sintonizador Manual de Señales (Stream Individual)
+                          </h4>
+                          <form onSubmit={playQuickStream} className="bg-slate-950/40 p-4 rounded-xl border border-slate-850/80 space-y-3">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Nombre del Canal / Transmisión</label>
+                                      <input 
+                                          type="text"
+                                          value={quickStreamName}
+                                          onChange={(e) => setQuickStreamName(e.target.value)}
+                                          placeholder="Ej: TN HLS Backup, Canal Local"
+                                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors"
+                                      />
+                                  </div>
+                                  <div>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">URL Directa del Stream (HLS .m3u8, .mp4, etc.)</label>
+                                      <input 
+                                          type="url"
+                                          value={quickStreamUrl}
+                                          onChange={(e) => setQuickStreamUrl(e.target.value)}
+                                          placeholder="https://example.com/live/playlist.m3u8"
+                                          required
+                                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors"
+                                      />
+                                  </div>
+                              </div>
+                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-1">
+                                  <span className="text-[10px] text-slate-500">Soporta enlaces HLS (.m3u8), MP4 directos, y streaming nativo de audio/video. Se guardará en "Sintonizaciones Manuales".</span>
+                                  <button 
+                                      type="submit"
+                                      className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 shadow active:scale-95 shrink-0"
+                                  >
+                                      <i className="fa-solid fa-play"></i> Sintonizar y Guardar
+                                  </button>
+                              </div>
+                          </form>
+                      </div>
                   </div>
               )}
 
@@ -1566,6 +1773,42 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">
                       {selectedCategory === 'iptv' ? "Señales IPTV Importadas" : "Grilla de Emisores"}
                   </h3>
+
+                  {selectedCategory === 'iptv' && iptvPlaylists.length > 0 && (
+                      <div className="mb-4 bg-slate-900/40 border border-slate-850 p-3 rounded-xl">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2"><i className="fa-solid fa-filter text-purple-400 mr-1.5"></i>Filtrar por Grupo / Categoría de la Lista:</span>
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-hide">
+                              <button 
+                                  onClick={() => setSelectedIptvGroup('all')}
+                                  className={cn(
+                                      "px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all",
+                                      selectedIptvGroup === 'all' 
+                                          ? "bg-purple-600 text-white shadow-sm" 
+                                          : "bg-slate-950 text-slate-400 hover:bg-slate-900 hover:text-slate-200 border border-slate-850"
+                                  )}
+                              >
+                                  Todos los Grupos ({iptvPlaylists.reduce((acc, p) => acc + p.channels.length, 0)})
+                              </button>
+                              {iptvGroups.map((groupName) => {
+                                  const count = iptvPlaylists.reduce((acc, p) => acc + p.channels.filter(ch => ch.group === groupName).length, 0);
+                                  return (
+                                      <button 
+                                          key={groupName}
+                                          onClick={() => setSelectedIptvGroup(groupName)}
+                                          className={cn(
+                                              "px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all",
+                                              selectedIptvGroup === groupName 
+                                                  ? "bg-purple-600 text-white shadow-sm" 
+                                                  : "bg-slate-950 text-slate-400 hover:bg-slate-900 hover:text-slate-200 border border-slate-850"
+                                          )}
+                                      >
+                                          {groupName} ({count})
+                                      </button>
+                                  );
+                              })}
+                          </div>
+                      </div>
+                  )}
                   
                   {filteredChannels.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
