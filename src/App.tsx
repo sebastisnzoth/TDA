@@ -923,8 +923,9 @@ export default function App() {
       setSelectedCategory('iptv');
     } catch (err: any) {
       console.error(err);
-      showToast(`Error al importar: ${err.message || 'Error desconocido'}`);
-      addLog(`[ERROR] Falló la importación de lista IPTV: ${err.message}`);
+      const errMsg = err.response?.data?.error || err.message || 'Error desconocido';
+      showToast(`Error al importar: ${errMsg}`);
+      addLog(`[ERROR] Falló la importación de lista IPTV: ${errMsg}`);
     } finally {
       setIsIptvLoading(false);
     }
@@ -1021,8 +1022,9 @@ export default function App() {
       setSelectedCategory('iptv');
     } catch (err: any) {
       console.error(err);
-      showToast(`Error al importar: ${err.message || 'Error desconocido'}`);
-      addLog(`[ERROR] Falló la importación preestablecida de IPTV: ${err.message}`);
+      const errMsg = err.response?.data?.error || err.message || 'Error desconocido';
+      showToast(`Error al importar: ${errMsg}`);
+      addLog(`[ERROR] Falló la importación preestablecida de IPTV: ${errMsg}`);
     } finally {
       setIsIptvLoading(false);
     }

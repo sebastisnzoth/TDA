@@ -230,7 +230,15 @@ async function startServer() {
       res.send(response.data);
     } catch (error: any) {
       console.error(`Error in IPTV proxy for ${url}:`, error.message);
-      res.status(500).json({ error: `No se pudo descargar la lista de canales: ${error.message}` });
+      
+      let statusCode = 502; // Bad Gateway by default for proxy errors
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        statusCode = 504; // Gateway Timeout
+      } else if (error.response?.status) {
+        statusCode = error.response.status; // Propagate upstream status
+      }
+      
+      res.status(statusCode).json({ error: `No se pudo descargar la lista de canales: ${error.message}` });
     }
   });
 
