@@ -247,7 +247,7 @@ export default function App() {
   const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(true);
   
   // Player state
-  const [playerState, setPlayerState] = useState<'idle' | 'loading' | 'online' | 'offline'>('idle');
+  const [playerState, setPlayerState] = useState<'idle' | 'loading' | 'online' | 'offline' | 'error'>('idle');
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   
   // Gemini AI state
@@ -366,6 +366,12 @@ export default function App() {
         setPlayerState('offline');
         setActiveVideoId(null);
     }
+  };
+
+  const handlePlayerError = (error: any) => {
+    addLog(`[ERROR] Falló la reproducción en cliente para ${activeChannelId}.`);
+    setPlayerState('error');
+    setActiveVideoId(null);
   };
 
   const toggleFavorite = (id: string, e?: React.MouseEvent) => {
@@ -513,10 +519,14 @@ export default function App() {
                                   <i className={cn("fa-solid", activeChannel ? "fa-triangle-exclamation text-rose-500 text-3xl" : "fa-satellite-dish text-red-500")}></i>
                               </div>
                               <h3 className="text-lg font-bold text-slate-100">
-                                  {activeChannel ? "Transmisión Interrumpida / Offline" : "Sin Señal / Seleccioná un Canal"}
+                                  {activeChannel 
+                                      ? (playerState === 'error' ? "Error de Reproducción" : "Transmisión Interrumpida / Offline") 
+                                      : "Sin Señal / Seleccioná un Canal"}
                               </h3>
                               <p className="text-sm text-slate-400 mt-1 max-w-sm">
-                                  {activeChannel ? `${activeChannel.name} se encuentra fuera de transmisión o su reproductor requiere validación de región.` : "Elegí cualquier señal de la grilla inferior para iniciar la simulación de streaming en vivo."}
+                                  {activeChannel 
+                                      ? (playerState === 'error' ? "El video no está disponible (puede requerir reproducirse en YouTube o fue eliminado)." : `${activeChannel.name} se encuentra fuera de transmisión o su reproductor requiere validación de región.`) 
+                                      : "Elegí cualquier señal de la grilla inferior para iniciar la simulación de streaming en vivo."}
                               </p>
                               {activeChannel && (
                                   <button onClick={() => selectChannel(activeChannel.id)} className="mt-4 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold transition-all shadow-md inline-flex items-center gap-2">
@@ -535,6 +545,7 @@ export default function App() {
                                   height="100%"
                                   playing={true}
                                   controls={true}
+                                  onError={handlePlayerError}
                                   config={{
                                       youtube: {
                                           playerVars: { rel: 0 }
