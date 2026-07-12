@@ -18,24 +18,24 @@ const channelCache: Record<string, CacheEntry> = {};
 
 // Fallback video IDs for demo purposes when API quota is exceeded or key is invalid
 const FALLBACK_VIDEOS: Record<string, string> = {
-  "tv-publica": "s2V5d_l23A",
-  "eltrece": "O1hV_R0-gX8",
-  "elnueve": "pGvXwI-sUUE",
-  "americatv": "1tO2tU1Hk6o",
-  "telefe": "z1o6n2D5G_8", 
-  "tn": "XWq5kBlakcQ",
+  "tv-publica": "cb12KmMMDJA", // Reusing a working live for demo if needed
+  "eltrece": "cb12KmMMDJA",
+  "elnueve": "cb12KmMMDJA",
+  "americatv": "cb12KmMMDJA",
+  "telefe": "cb12KmMMDJA", 
+  "tn": "cb12KmMMDJA",
   "c5n": "c-wG7Qn5fJc",
-  "ln-mas": "6gJdK1DkC0A",
-  "a24": "v_b-Qn7Xz0s",
-  "cronica": "0j5l0_2wZk0",
-  "canal26": "r4e0-LweWj8",
-  "ip-noticias": "Vd9L9R1F2Xo",
-  "el-tres-rosario": "Q3oP5J8-W2c",
-  "el-doce-cordoba": "Q3oP5J8-W2c",
-  "canal-9-mendoza": "Q3oP5J8-W2c",
-  "canal-10-cordoba": "Q3oP5J8-W2c",
-  "chaco-tv": "Q3oP5J8-W2c",
-  "canal-7-chubut": "Q3oP5J8-W2c"
+  "ln-mas": "cb12KmMMDJA",
+  "a24": "cb12KmMMDJA",
+  "cronica": "cb12KmMMDJA",
+  "canal26": "cb12KmMMDJA",
+  "ip-noticias": "cb12KmMMDJA",
+  "el-tres-rosario": "cb12KmMMDJA",
+  "el-doce-cordoba": "cb12KmMMDJA",
+  "canal-9-mendoza": "cb12KmMMDJA",
+  "canal-10-cordoba": "cb12KmMMDJA",
+  "chaco-tv": "cb12KmMMDJA",
+  "canal-7-chubut": "cb12KmMMDJA"
 };
 
 // Channel mapping ID -> YouTube Channel ID

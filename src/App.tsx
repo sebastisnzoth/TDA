@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import ReactPlayer from 'react-player';
 import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
-
-const Player = ReactPlayer as any;
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -349,17 +346,15 @@ export default function App() {
             serverTime: new Date().toISOString()
         });
 
-        setTimeout(() => {
-            if (finalStatus === 'online' && finalVideoId) {
-                setPlayerState('online');
-                setActiveVideoId(finalVideoId);
-                addLog(`[SUCCESS] Stream del canal ${channel.id} cargado nativamente en el front.`);
-            } else {
-                setPlayerState('offline');
-                setActiveVideoId(null);
-                addLog(`[WARNING] Stream del canal ${channel.id} denegado. Código de respuesta: OFFLINE.`);
-            }
-        }, 800);
+        if (finalStatus === 'online' && finalVideoId) {
+            setPlayerState('online');
+            setActiveVideoId(finalVideoId);
+            addLog(`[SUCCESS] Stream del canal ${channel.id} cargado nativamente en el front.`);
+        } else {
+            setPlayerState('offline');
+            setActiveVideoId(null);
+            addLog(`[WARNING] Stream del canal ${channel.id} denegado. Código de respuesta: OFFLINE.`);
+        }
 
     } catch (err) {
         addLog(`[ERROR] Falló la petición para ${channel.id}.`);
@@ -369,9 +364,9 @@ export default function App() {
   };
 
   const handlePlayerError = (error: any) => {
-    addLog(`[ERROR] Falló la reproducción en cliente para ${activeChannelId}.`);
+    addLog(`[ERROR] Falló la reproducción en cliente para ${activeChannelId}. (Error de YT)`);
     setPlayerState('error');
-    setActiveVideoId(null);
+    // Mantenemos activeVideoId para que pueda reintentar
   };
 
   const toggleFavorite = (id: string, e?: React.MouseEvent) => {
@@ -539,20 +534,14 @@ export default function App() {
                       {/* YouTube Live Player Container */}
                       <div id="player-iframe-container" className={cn("absolute inset-0 w-full h-full transition-opacity duration-300", playerState === 'online' ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none')}>
                           {activeVideoId && playerState === 'online' && (
-                              <Player 
-                                  url={`https://www.youtube.com/watch?v=${activeVideoId}`}
-                                  width="100%"
-                                  height="100%"
-                                  playing={true}
-                                  controls={true}
-                                  onError={handlePlayerError}
-                                  config={{
-                                      youtube: {
-                                          playerVars: { rel: 0 }
-                                      }
-                                  }}
-                                  style={{ position: 'absolute', top: 0, left: 0 }}
-                              />
+                              <iframe 
+                                  key={activeVideoId}
+                                  src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&rel=0&showinfo=0`}
+                                  className="w-full h-full absolute top-0 left-0"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                  title="Reproductor de TV en Vivo"
+                              ></iframe>
                           )}
                       </div>
 
