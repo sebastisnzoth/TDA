@@ -556,49 +556,78 @@ export default function App() {
                   </div>
 
                   {/* Player Control Info bar */}
-                  <div className="p-4 bg-slate-900 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-t border-slate-800/60">
-                      <div className="flex items-center gap-3">
-                          <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center border border-slate-800 text-lg font-bold p-1 overflow-hidden", activeChannel && playerState === 'online' ? activeChannel.logoBg : "bg-slate-950 text-slate-500")}
-                               dangerouslySetInnerHTML={{ __html: activeChannel && playerState === 'online' ? activeChannel.logoHtml : '<i class="fa-solid fa-circle-play text-slate-600"></i>' }}>
-                          </div>
-                          <div>
-                              <div className="flex items-center gap-2">
-                                  <h2 className="font-bold text-slate-100">{activeChannel ? activeChannel.name : "Seleccioná un Canal"}</h2>
-                                  {activeChannel && playerState === 'online' && (
-                                      <span className="px-2 py-0.5 text-[10px] uppercase font-extrabold rounded-full bg-slate-800 text-slate-400">{activeChannel.category}</span>
-                                  )}
+                  <div className="p-4 bg-slate-900 border-t border-slate-800/60">
+                      {/* Video Title */}
+                      <h2 className="font-bold text-lg md:text-xl text-slate-50 mb-3">
+                          {activeChannel ? (playerState === 'online' ? `${activeChannel.currentShow} - EN VIVO` : "Transmisión no disponible") : "Esperando selección..."}
+                      </h2>
+                      
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                          {/* Channel Info & Subscribe */}
+                          <div className="flex items-center gap-3">
+                              <div className={cn("w-10 h-10 rounded-full flex items-center justify-center border border-slate-700 text-lg font-bold p-1 overflow-hidden", activeChannel && playerState === 'online' ? activeChannel.logoBg : "bg-slate-950 text-slate-500")}
+                                   dangerouslySetInnerHTML={{ __html: activeChannel && playerState === 'online' ? activeChannel.logoHtml : '<i class="fa-solid fa-tv text-slate-600"></i>' }}>
                               </div>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                  {playerState === 'online' && (
-                                      <span className="flex h-2 w-2 relative">
-                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                                      </span>
-                                  )}
-                                  <p className="text-xs text-slate-400">
-                                      {activeChannel ? (playerState === 'online' ? activeChannel.currentShow : "Fuera de emisión") : "Esperando selección..."}
+                              <div className="flex flex-col justify-center">
+                                  <h3 className="font-bold text-sm text-slate-100 leading-tight flex items-center gap-1">
+                                      {activeChannel ? activeChannel.name : "TDA Canal"}
+                                      {activeChannel && <i className="fa-solid fa-circle-check text-slate-400 text-[10px]"></i>}
+                                  </h3>
+                                  <p className="text-[11px] text-slate-400">
+                                      {activeChannel ? `${formatNumber(Math.floor(Math.random() * 800) + 100)} mil suscriptores` : ""}
                                   </p>
-                                  {activeChannel && playerState === 'online' && (
-                                      <span className="text-[10px] bg-slate-800/80 px-1.5 py-0.5 rounded text-rose-400 font-semibold">
-                                          <i className="fa-solid fa-eye mr-1"></i>{formatNumber(activeChannel.viewerCount)} espectadores
-                                      </span>
-                                  )}
                               </div>
+                              <button 
+                                  onClick={(e) => activeChannel && toggleFavorite(activeChannel.id, e)} 
+                                  className={cn("ml-1 sm:ml-3 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold transition-colors", 
+                                      favorites.includes(activeChannelId || '') ? "bg-slate-800 hover:bg-slate-700 text-slate-200" : "bg-white hover:bg-slate-200 text-slate-950"
+                                  )}
+                              >
+                                  <span className="hidden sm:inline">{favorites.includes(activeChannelId || '') ? "Suscrito" : "Suscribirse"}</span>
+                                  <span className="sm:hidden">{favorites.includes(activeChannelId || '') ? "Suscrito" : "Suscribir"}</span>
+                                  {favorites.includes(activeChannelId || '') && <i className="fa-regular fa-bell ml-2"></i>}
+                              </button>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
+                              <div className="flex items-center bg-slate-800 rounded-full">
+                                  <button className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 hover:bg-slate-700 rounded-l-full text-xs sm:text-sm font-semibold text-slate-200 border-r border-slate-700 transition-colors">
+                                      <i className="fa-regular fa-thumbs-up"></i>
+                                      <span>12k</span>
+                                  </button>
+                                  <button className="flex items-center px-3 sm:px-4 py-1.5 sm:py-2 hover:bg-slate-700 rounded-r-full text-xs sm:text-sm text-slate-200 transition-colors">
+                                      <i className="fa-regular fa-thumbs-down"></i>
+                                  </button>
+                              </div>
+                              
+                              <button onClick={shareActiveChannel} className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-800 hover:bg-slate-700 rounded-full text-xs sm:text-sm font-semibold text-slate-200 transition-colors whitespace-nowrap">
+                                  <i className="fa-solid fa-share"></i>
+                                  <span className="hidden sm:inline">Compartir</span>
+                              </button>
+
+                              <button onClick={handleFullscreen} className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-800 hover:bg-slate-700 rounded-full text-xs sm:text-sm font-semibold text-slate-200 transition-colors whitespace-nowrap" title="Pantalla Completa">
+                                  <i className="fa-solid fa-expand"></i>
+                              </button>
                           </div>
                       </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-                          <button onClick={() => activeChannel && toggleFavorite(activeChannel.id)} className={cn("p-2.5 border rounded-xl transition-colors", favorites.includes(activeChannelId || '') ? "bg-rose-950/40 hover:bg-rose-900/40 border-rose-500/30 text-rose-400" : "bg-slate-800 hover:bg-slate-700 border-slate-700/50 text-slate-400 hover:text-rose-500")} title="Añadir a Favoritos">
-                              <i className={favorites.includes(activeChannelId || '') ? "fa-solid fa-heart" : "fa-regular fa-heart"}></i>
-                          </button>
-                          <button onClick={shareActiveChannel} className="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700/50 rounded-xl text-slate-400 hover:text-sky-400 transition-colors" title="Compartir Enlace">
-                              <i className="fa-solid fa-share-nodes"></i>
-                          </button>
-                          <button onClick={handleFullscreen} className="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700/50 rounded-xl text-slate-400 hover:text-white transition-colors" title="Modo Pantalla Completa">
-                              <i className="fa-solid fa-expand"></i>
-                          </button>
-                      </div>
+                      
+                      {/* Description Box (YouTube style) */}
+                      {activeChannel && playerState === 'online' && (
+                          <div className="mt-4 bg-slate-800/50 hover:bg-slate-800 transition-colors p-3 rounded-xl cursor-pointer">
+                              <div className="flex items-center gap-2 text-sm font-semibold text-slate-200 mb-1">
+                                  <span className="flex items-center text-red-500 font-bold">
+                                      <i className="fa-solid fa-tower-broadcast mr-1.5 text-xs"></i>
+                                      En vivo
+                                  </span>
+                                  <span className="text-slate-400">•</span>
+                                  <span className="text-slate-300">{formatNumber(activeChannel.viewerCount)} espectadores</span>
+                              </div>
+                              <p className="text-sm text-slate-300 mt-1">
+                                  Estás viendo <strong>{activeChannel.currentShow}</strong> en la transmisión oficial de {activeChannel.name} ({activeChannel.region}). 
+                              </p>
+                          </div>
+                      )}
                   </div>
               </div>
 
