@@ -1266,7 +1266,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       'tn': 'cb12KmMMDJA',
       'americatv': 'Q32ajLjh8SU',
       'tv-publica': 'Vh8xmLBJtR8',
-      'c5n': 'KRezJC7_9Uw',
+      'c5n': 'rZtTUCxpPuI',
       'cronica': 'hw4uHyct4vg',
       'canal26': '9i6d_Z8X0qY',
       'ln-mas': 'hexOV2Z0jvA'
