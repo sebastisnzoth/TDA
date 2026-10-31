@@ -1005,30 +1005,46 @@ export default function App() {
 
   const PRESET_LISTS = [
     {
-      name: "Argentina Gist M3U",
-      url: "https://gist.githubusercontent.com/frantdse/f6989518c73826ade6734c63c367af4c/raw/",
-      desc: "Excelente lista curada por la comunidad con señales nacionales, aire y TDA.",
-      badge: "Comunidad / TDA"
+      name: "Argentina — Canales públicos",
+      url: "https://iptv-org.github.io/iptv/countries/ar.m3u",
+      desc: "Catálogo comunitario de transmisiones abiertas de Argentina. La disponibilidad depende de cada canal.",
+      badge: "Argentina"
     },
     {
-      name: "Argentina ASTRA (Opción 1)",
-      url: "http://149.107.251.5:8000/playlist.m3u?hls",
-      desc: "Servidor Astra IPTV activo con señales estables HLS de aire.",
-      badge: "Astra #1"
+      name: "Ciudad de Buenos Aires",
+      url: "https://iptv-org.github.io/iptv/subdivisions/ar-c.m3u",
+      desc: "Emisiones públicas clasificadas en CABA.",
+      badge: "CABA"
     },
     {
-      name: "Argentina ASTRA (Opción 2)",
-      url: "http://181.119.215.61:8000/playlist.m3u?hls",
-      desc: "Servidor Astra IPTV alternativo con señales locales de Argentina.",
-      badge: "Astra #2"
+      name: "Provincia de Buenos Aires",
+      url: "https://iptv-org.github.io/iptv/subdivisions/ar-b.m3u",
+      desc: "Señales públicas de la provincia de Buenos Aires.",
+      badge: "Provincia"
     },
     {
-      name: "Argentina ASTRA (Opción 3)",
-      url: "http://181.233.180.4:8000/playlist.m3u?hls",
-      desc: "Servidor Astra IPTV con foco en señales del interior y deportes.",
-      badge: "Astra #3"
+      name: "Córdoba",
+      url: "https://iptv-org.github.io/iptv/subdivisions/ar-x.m3u",
+      desc: "Canales públicos clasificados en Córdoba.",
+      badge: "Interior"
+    },
+    {
+      name: "Santa Fe",
+      url: "https://iptv-org.github.io/iptv/subdivisions/ar-s.m3u",
+      desc: "Canales públicos clasificados en Santa Fe.",
+      badge: "Interior"
+    },
+    {
+      name: "Noticias internacionales",
+      url: "https://iptv-org.github.io/iptv/categories/news.m3u",
+      desc: "Señales de noticias públicas, disponibles según región.",
+      badge: "Noticias"
     }
   ];
+  const [presetSearch, setPresetSearch] = useState('');
+  const filteredPresets = PRESET_LISTS.filter(preset =>
+    `${preset.name} ${preset.desc} ${preset.badge}`.toLocaleLowerCase('es').includes(presetSearch.trim().toLocaleLowerCase('es'))
+  );
 
   const importPresetIptv = async (name: string, url: string) => {
     setIsIptvLoading(true);
@@ -1691,8 +1707,17 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                               <i className="fa-solid fa-wand-magic-sparkles text-purple-400 animate-pulse"></i>
                               Listas Recomendadas de Argentina (Un Click para Importar)
                           </h4>
+                          <input
+                            type="search"
+                            value={presetSearch}
+                            onChange={(event) => setPresetSearch(event.target.value)}
+                            placeholder="Buscar listas: Argentina, Buenos Aires, Córdoba, noticias..."
+                            aria-label="Buscar listas IPTV"
+                            className="mb-3 w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500"
+                          />
+                          {filteredPresets.length === 0 && <p className="mb-3 text-xs text-slate-400">No encontramos listas para esa búsqueda.</p>}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                              {PRESET_LISTS.map((preset) => {
+                              {filteredPresets.map((preset) => {
                                   const alreadyImported = iptvPlaylists.some(p => p.url === preset.url || p.name === preset.name);
                                   return (
                                       <div key={preset.name} className="bg-slate-950/40 border border-slate-850 hover:border-slate-800 p-3.5 rounded-xl flex flex-col justify-between transition-all hover:bg-slate-950/70">
