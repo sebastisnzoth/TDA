@@ -1608,7 +1608,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       <main className="flex-grow max-w-7xl w-full mx-auto p-4 flex flex-col lg:flex-row gap-6 relative">
           
           {/* Left Column: App UI & Player (70%) */}
-          <div className="flex-grow lg:w-2/3 flex flex-col gap-6">
+          <div className="flex-grow w-full min-w-0 flex flex-col gap-6">
 
               {/* Active Video Player Section */}
               <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl relative">
