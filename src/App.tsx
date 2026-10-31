@@ -1277,7 +1277,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       'c5n': 'rZtTUCxpPuI',
       'cronica': 'hw4uHyct4vg',
       'canal26': '9i6d_Z8X0qY',
-      'ln-mas': 'hexOV2Z0jvA',
+      'ln-mas': 'FEWZjXJ7M0c',
       'el-doce-cordoba': 'nndzeKDSjuc',
       'eltrece': 'nndzeKDSjuc',
       'elnueve': 'yGLVhAklLyM'
