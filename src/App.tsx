@@ -6,6 +6,26 @@ import ReactPlayer from 'react-player';
 
 const Player = ReactPlayer as any;
 
+const getYouTubeVideoId = (url: string): string | null => {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    let id: string | null = null;
+    if (host === 'youtu.be' || host === 'www.youtu.be') id = parsed.pathname.slice(1).split('/')[0];
+    else if (host === 'youtube.com' || host === 'www.youtube.com' || host === 'm.youtube.com') {
+      if (parsed.pathname === '/watch') id = parsed.searchParams.get('v');
+      else if (parsed.pathname.startsWith('/live/') || parsed.pathname.startsWith('/embed/')) id = parsed.pathname.split('/')[2];
+    }
+    return id && /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
+  } catch { return null; }
+};
+const isYouTubeUrl = (url: string): boolean => {
+  try { return /^(www\\.|m\\.)?(youtube\\.com|youtu\\.be)$/.test(new URL(url).hostname.toLowerCase()); }
+  catch { return false; }
+};
+
+
+
 // Patch HTMLMediaElement.prototype.play to handle interruption / AbortError gracefully
 if (typeof window !== 'undefined' && window.HTMLMediaElement) {
   const originalPlay = window.HTMLMediaElement.prototype.play;
@@ -81,7 +101,7 @@ const CHANNELS_DATA = [
       id: "eltrece",
       name: "El Trece",
       category: "aire",
-      channelId: "UC9Zf_V_itV_4mP_P_K_D_3g",
+      channelId: "UC0DM_mHV2u6dj8ig51GkQwg",
       online: true,
       logoBg: "bg-slate-950",
       logoHtml: `<div class="relative w-7 h-7 flex items-center justify-center bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 rounded-full"><div class="w-3 h-3 bg-slate-950 rounded-full"></div></div>`,
@@ -129,7 +149,7 @@ const CHANNELS_DATA = [
       id: "tn",
       name: "TN (Todo Noticias)",
       category: "noticias",
-      channelId: "UCj6PcyIvBYnX20nJdx9E9GA",
+      channelId: "UCj6PcyLvpnIRT_2W_mwa9Aw",
       online: true,
       logoBg: "bg-slate-950",
       logoHtml: `<div class="flex items-center font-black text-sm italic"><span class="text-blue-500">T</span><span class="text-red-500">N</span></div>`,
@@ -869,6 +889,42 @@ export default function App() {
     return channelsList;
   };
 
+  // Ship the user's Argentina playlist with TDA; update existing bundled copy on app release.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${import.meta.env.BASE_URL}listas/argentina-usuario.m3u`)
+      .then(response => {
+        if (!response.ok) throw new Error('Lista local no disponible');
+        return response.text();
+      })
+      .then(text => {
+        if (cancelled) return;
+        const parsed = parseM3u(text);
+        if (parsed.length === 0) return;
+        const bundled: IptvPlaylist = {
+          id: 'tda-argentina-usuario',
+          name: 'Argentina — Lista incorporada',
+          url: '/listas/argentina-usuario.m3u',
+          channelsCount: parsed.length,
+          channels: parsed.map((ch, index) => ({
+            id: `tda-ar-${index}`,
+            name: ch.name,
+            streamUrl: ch.streamUrl,
+            logoUrl: ch.logoUrl,
+            category: 'iptv',
+            group: ch.group
+          }))
+        };
+        setIptvPlaylists(previous => {
+          const updated = [...previous.filter(p => p.id !== bundled.id), bundled];
+          try { localStorage.setItem('tda_iptv_playlists', JSON.stringify(updated)); } catch {}
+          return updated;
+        });
+      })
+      .catch(error => console.warn('[TDA] No se pudo cargar la lista argentina incluida:', error));
+    return () => { cancelled = true; };
+  }, []);
+
   const handleImportIptv = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!iptvName.trim()) {
@@ -882,7 +938,7 @@ export default function App() {
     try {
       if (iptvUrl.trim()) {
         addLog(`[IPTV IMPORT] Descargando lista desde ${iptvUrl}...`);
-        const res = await axios.get(`/api/iptv/proxy?url=${encodeURIComponent(iptvUrl.trim())}`);
+        const res = await axios.get(iptvUrl.trim());
         m3uText = res.data;
       } else if (iptvRawText.trim()) {
         addLog(`[IPTV IMPORT] Procesando texto raw de M3U pasteado...`);
@@ -1161,6 +1217,22 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
     setPlayerState('loading');
     setActiveVideoId(null);
 
+    // YouTube channel pages cannot be embedded as video frames without an actual live video ID.
+    // Only individual YouTube videos may be embedded; otherwise link to the broadcaster's official page.
+    if ('streamUrl' in channel && (channel as any).streamUrl && isYouTubeUrl((channel as any).streamUrl)) {
+      const youtubeUrl = (channel as any).streamUrl as string;
+      const id = getYouTubeVideoId(youtubeUrl);
+      setApiResponse({ status: id ? 'video_detected' : 'external_only', title: channel.name, source: youtubeUrl });
+      if (id) {
+        setActiveVideoId(id);
+        setPlayerState('online');
+      } else {
+        setPlayerState('offline');
+        addLog(`[YOUTUBE] La URL de "${channel.name}" es una página, no un video insertable; usar enlace oficial.`);
+      }
+      return;
+    }
+
     // A playlist URL is not proof of an active stream. Wait for actual playback.
     if ('streamUrl' in channel && (channel as any).streamUrl) {
       const streamUrl = (channel as any).streamUrl;
@@ -1173,6 +1245,13 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
         cached: false,
         serverTime: new Date().toISOString()
       });
+      return;
+    }
+
+    if (import.meta.env.PROD && import.meta.env.BASE_URL !== '/') {
+      setPlayerState('offline');
+      setApiResponse({ status: 'external_only', channelUrl: channel.channelId ? `https://www.youtube.com/channel/${channel.channelId}/live` : null });
+      addLog(`[GITHUB PAGES] El canal ${channel.name} requiere resolver su video en vivo desde YouTube; abrilo en el sitio oficial.`);
       return;
     }
 
@@ -1403,8 +1482,22 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                               <p className="text-sm text-slate-400 mt-1 max-w-sm">
                                   {activeChannel 
                                       ? (playerState === 'error' ? "El video no está disponible (puede requerir reproducirse en YouTube o fue eliminado)." : `${activeChannel.name} se encuentra fuera de transmisión o su reproductor requiere validación de región.`) 
-                                      : "Elegí cualquier señal de la grilla inferior para iniciar la simulación de streaming en vivo."}
+                                      : "Elegí un canal de la grilla inferior para comprobar su señal."}
                               </p>
+                              {activeChannel && 'streamUrl' in activeChannel && isYouTubeUrl(String((activeChannel as any).streamUrl)) && (
+                                  <a href={String((activeChannel as any).streamUrl)}
+                                     target="_blank" rel="noopener noreferrer"
+                                     className="mt-3 inline-flex rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500">
+                                    Abrir transmisión en YouTube
+                                  </a>
+                              )}
+                              {activeChannel && !('streamUrl' in activeChannel) && activeChannel.channelId && (
+                                 <a href={`https://www.youtube.com/channel/${activeChannel.channelId}/live`}
+                                    target="_blank" rel="noopener noreferrer"
+                                    className="mt-3 inline-flex rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500">
+                                   Ver canal oficial en YouTube
+                                 </a>
+                              )}
                               {activeChannel && (
                                   <div className="mt-4 flex flex-wrap gap-2 justify-center">
                                       <button onClick={() => selectChannel(activeChannel.id)} className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold transition-all shadow-md inline-flex items-center gap-2">
@@ -1421,7 +1514,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                       {/* Live Player Container */}
                       <div id="player-iframe-container" className={cn("absolute inset-0 w-full h-full transition-opacity duration-300 bg-black", (playerState === 'online' || (playerState === 'loading' && activeChannel && 'streamUrl' in activeChannel)) ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none')}>
                           {(playerState === 'online' || (playerState === 'loading' && activeChannel && 'streamUrl' in activeChannel)) && (
-                              activeChannel && 'streamUrl' in activeChannel && (activeChannel as any).streamUrl ? (
+                              activeChannel && 'streamUrl' in activeChannel && (activeChannel as any).streamUrl && !isYouTubeUrl((activeChannel as any).streamUrl) ? (
                                   <Player 
                                       src={(activeChannel as any).streamUrl}
                                       playing={playerPlaying}
@@ -1457,7 +1550,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                                   activeVideoId && (
                                       <iframe 
                                           key={activeVideoId}
-                                          src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&rel=0&showinfo=0`}
+                                          src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&playsinline=1&rel=0`}
                                           className="w-full h-full absolute top-0 left-0"
                                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                           allowFullScreen

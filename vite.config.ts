@@ -6,6 +6,7 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    base: process.env.GITHUB_PAGES === 'true' ? '/TDA/' : '/',
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

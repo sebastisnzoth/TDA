@@ -13,42 +13,45 @@ interface CacheEntry {
   timestamp: number;
 }
 
-const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
-const channelCache: Record<string, CacheEntry> = {};
-
-// Fallback video IDs for demo purposes when API quota is exceeded or key is invalid
-const FALLBACK_VIDEOS: Record<string, string> = {
-  "tv-publica": "eQhhPVzs6qM", // Reusing a working live for demo if needed
-  "eltrece": "nndzeKDSjuc",
-  "elnueve": "C1DhpJ07ZuE",
-  "americatv": "Vh8xmLBJtR8",
-  "telefe": "5ABLiIbQchA",
-  "tn": "cb12KmMMDJA",
-  "c5n": "xWG-47NFsTg",
-  "ln-mas": "FEWZjXJ7M0c",
-  "a24": "ArKbAx1K-2U",
-  "cronica": "hw4uHyct4vg",
-  "canal26": "cb12KmMMDJA",
-  "ip-noticias": "cb12KmMMDJA",
-  "el-tres-rosario": "cb12KmMMDJA",
-  "el-doce-cordoba": "cb12KmMMDJA",
-  "canal-9-mendoza": "cb12KmMMDJA",
-  "canal-10-cordoba": "cb12KmMMDJA",
-  "chaco-tv": "cb12KmMMDJA",
-  "canal-7-chubut": "cb12KmMMDJA"
+const CACHE_DURATION_MS = 5 * 60 * 1000;
+// Expected broadcaster names: verify every configured YouTube channel before advertising a live signal.
+// A verified channel lookup is cached, and unknown/mismatched channels remain unavailable.
+const CHANNEL_NAMES: Record<string, string[]> = {
+  "tv-publica": ["tv pública", "televisión pública", "tv publica"],
+  "eltrece": ["eltrece", "el trece"],
+  "elnueve": ["elnueve", "el nueve", "canal 9"],
+  "americatv": ["américa tv", "america tv", "america televisión"],
+  "telefe": ["telefe"],
+  "tn": ["tn", "todo noticias"],
+  "c5n": ["c5n"],
+  "ln-mas": ["la nacion", "la nación", "ln+", "ln mas"],
+  "a24": ["a24", "américa 24", "america 24"],
+  "cronica": ["crónica", "cronica"],
+  "canal26": ["canal 26", "canal26"],
+  "ip-noticias": ["ip noticias", "argentina 12"],
+  "el-tres-rosario": ["el tres", "canal 3 rosario"],
+  "el-doce-cordoba": ["el doce", "canal 12 córdoba", "eldoce"],
+  "canal-9-mendoza": ["canal 9 mendoza", "nueve mendoza", "televida"],
+  "canal-10-cordoba": ["canal 10", "cba24n", "universidad nacional de córdoba"],
+  "chaco-tv": ["chaco tv", "chaco televisión"],
+  "canal-7-chubut": ["canal 7 chubut", "chubut tv"]
 };
+const verifiedChannelCache = new Map<string, { ok: boolean; at: number }>();
+const normalized = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+ // 5 minutes
+const channelCache: Record<string, CacheEntry> = {};
 
 // Channel mapping ID -> YouTube Channel ID
 const CHANNELS: Record<string, string> = {
   // Principales
   "tv-publica": "UC7Z_40wZasf_7_bgnM2vVAg",
-  "eltrece": "UC9Zf_V_itV_4mP_P_K_D_3g",
+  "eltrece": "UC0DM_mHV2u6dj8ig51GkQwg",
   "elnueve": "UCZ496WYLWnyUv2I08vKvxGA",
   "americatv": "UC_83bfeC_zZNSvN287B9xOQ",
   "telefe": "UCzSQKUenBCK-XkU_VldC0BQ", // Generic fallback if needed
   
   // Noticias
-  "tn": "UCj6PcyIvBYnX20nJdx9E9GA",
+  "tn": "UCj6PcyLvpnIRT_2W_mwa9Aw",
   "c5n": "UCuY095izSIn7wVbV6vW6u6Q",
   "ln-mas": "UC7w_Z0_XgZf8H_SgRbcHIsA",
   "a24": "UC1E_4gK7_rT_T_8V06qA4bA",
@@ -134,15 +137,29 @@ export async function startServer(serverless = false) {
 
     const apiKey = process.env.YOUTUBE_API_KEY;
     if (!apiKey || apiKey === 'MY_YOUTUBE_API_KEY') {
-      console.warn(`YOUTUBE_API_KEY is not set or invalid. Returning fallback video for ${channelId}.`);
-      const fallbackId = FALLBACK_VIDEOS[channelId];
-      if (fallbackId) {
-        return res.json({ status: "online", videoId: fallbackId, title: "En Vivo (Fallback Mode)" });
-      }
-      return res.json({ status: "error", videoId: null, title: null });
+      return res.status(503).json({
+        status: "unavailable",
+        videoId: null,
+        title: null,
+        error: "YOUTUBE_API_KEY no configurada; no se puede verificar la transmisión en vivo.",
+        channelUrl: `https://www.youtube.com/channel/${ytChannelId}/live`
+      });
     }
 
     try {
+      const check = verifiedChannelCache.get(channelId);
+      if (!check || now - check.at > CACHE_DURATION_MS) {
+        const channelInfo = await axios.get("https://www.googleapis.com/youtube/v3/channels", {
+          params: { part: "snippet", id: ytChannelId, key: apiKey, fields: "items(snippet/title)" },
+          timeout: 8000
+        });
+        const actualName = normalized(channelInfo.data.items?.[0]?.snippet?.title || "");
+        const ok = Boolean(actualName && CHANNEL_NAMES[channelId]?.some(name => actualName.includes(normalized(name))));
+        verifiedChannelCache.set(channelId, { ok, at: now });
+      }
+      if (!verifiedChannelCache.get(channelId)?.ok) {
+        return res.json({ status: "offline", videoId: null, title: null, reason: "El identificador de YouTube no corresponde a un canal verificado." });
+      }
       // Search for active live streams on the channel
       const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
         params: {
@@ -152,11 +169,12 @@ export async function startServer(serverless = false) {
           type: 'video',
           key: apiKey,
           fields: 'items(id/videoId,snippet/title)',
-          maxResults: 1
+          maxResults: 5
         }
       });
 
       const items = response.data.items;
+      // Only YouTube API live search results are eligible; no fabricated fallback IDs.
       
       let resultData;
       if (items && items.length > 0) {
@@ -192,13 +210,6 @@ export async function startServer(serverless = false) {
         return res.json(cached.data);
       }
       
-      // Fallback to demo videos if quota is exceeded (403) or bad request (400)
-      if (statusCode === 403 || statusCode === 400) {
-        const fallbackId = FALLBACK_VIDEOS[channelId];
-        if (fallbackId) {
-          return res.json({ status: "online", videoId: fallbackId, title: "En Vivo (Fallback Mode)" });
-        }
-      }
 
       res.json({
         status: 'error',
@@ -213,32 +224,60 @@ export async function startServer(serverless = false) {
     res.json(Object.keys(CHANNELS));
   });
 
-  // Proxy endpoint to fetch external IPTV .m3u playlists without CORS issues
+  // Public IPTV playlists only. Deny private/reserved networks and unsafe redirects.
   app.get("/api/iptv/proxy", async (req, res) => {
-    const url = req.query.url as string;
-    if (!url) {
-      return res.status(400).json({ error: "Falta parámetro 'url'" });
-    }
+    const requestedUrl = typeof req.query.url === "string" ? req.query.url : "";
+    if (!requestedUrl) return res.status(400).json({ error: "Falta parámetro 'url'" });
     try {
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        },
-        timeout: 10000 // 10s timeout
-      });
-      res.setHeader('Content-Type', 'text/plain');
-      res.send(response.data);
-    } catch (error: any) {
-      console.error(`Error in IPTV proxy for ${url}:`, error.message);
-      
-      let statusCode = 502; // Bad Gateway by default for proxy errors
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        statusCode = 504; // Gateway Timeout
-      } else if (error.response?.status) {
-        statusCode = error.response.status; // Propagate upstream status
+      const dns = await import("node:dns/promises");
+      const net = await import("node:net");
+      const validate = async (raw: string) => {
+        const parsed = new URL(raw);
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new Error("Solo HTTP/HTTPS");
+        if (parsed.username || parsed.password) throw new Error("URL con credenciales no permitida");
+        const hostname = parsed.hostname.toLowerCase().replace(/\\.$/, "");
+        if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname.endsWith(".internal")) throw new Error("Host local no permitido");
+        const addresses = net.isIP(hostname) ? [{ address: hostname }] : await dns.lookup(hostname, { all: true, verbatim: true });
+        if (!addresses.length) throw new Error("Host sin resolución pública");
+        for (const { address } of addresses) {
+          const parts = address.split(".").map(Number);
+          if (net.isIP(address) === 4 && (
+            parts[0] === 0 || parts[0] === 10 || parts[0] === 127 || parts[0] >= 224 ||
+            (parts[0] === 169 && parts[1] === 254) || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+            (parts[0] === 192 && parts[1] === 168) || (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) ||
+            (parts[0] === 192 && parts[1] === 0) || (parts[0] === 198 && (parts[1] === 18 || parts[1] === 19))
+          )) throw new Error("Dirección IP no pública");
+          if (net.isIP(address) === 6 && (
+            address === "::1" || address === "::" || address.toLowerCase().startsWith("fc") ||
+            address.toLowerCase().startsWith("fd") || /^fe[89ab]/i.test(address) || address.toLowerCase().startsWith("::ffff:")
+          )) throw new Error("Dirección IP no pública");
+        }
+        return parsed.toString();
+      };
+      // Only allow maintained public playlist hosts. This also avoids DNS rebinding to private services.
+      const allowedHosts = new Set(["iptv-org.github.io", "raw.githubusercontent.com", "gist.githubusercontent.com"]);
+      let next = requestedUrl;
+      for (let hop = 0; hop < 4; hop++) {
+        const safe = await validate(next);
+        if (!allowedHosts.has(new URL(safe).hostname.toLowerCase())) throw new Error("Fuente IPTV no autorizada para importación por URL; usá la opción Archivo");
+        const upstream = await axios.get(safe, {
+          responseType: "text", timeout: 9000, maxContentLength: 2_000_000,
+          maxRedirects: 0, validateStatus: status => status >= 200 && status < 400
+        });
+        if (upstream.status >= 300) {
+          if (!upstream.headers.location) throw new Error("Redirección sin destino");
+          next = new URL(upstream.headers.location, safe).toString();
+          continue;
+        }
+        const content = String(upstream.data);
+        if (content.length > 2_000_000 || !content.trimStart().startsWith("#EXTM3U")) throw new Error("La respuesta no es una lista M3U válida");
+        res.type("text/plain; charset=utf-8").send(content);
+        return;
       }
-      
-      res.status(statusCode).json({ error: `No se pudo descargar la lista de canales: ${error.message}` });
+      return res.status(502).json({ error: "Demasiadas redirecciones" });
+    } catch (error: any) {
+      console.warn("IPTV import failed:", error?.message);
+      return res.status(422).json({ error: "No se pudo importar la lista: " + (error?.message || "origen no disponible") });
     }
   });
 
