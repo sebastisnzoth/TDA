@@ -1586,38 +1586,40 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                       <div id="player-iframe-container" className={cn("absolute inset-0 w-full h-full transition-opacity duration-300 bg-black", (playerState === 'online' || (playerState === 'loading' && activeChannel && 'streamUrl' in activeChannel)) ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none')}>
                           {(playerState === 'online' || (playerState === 'loading' && activeChannel && 'streamUrl' in activeChannel)) && (
                               activeChannel && 'streamUrl' in activeChannel && (activeChannel as any).streamUrl && !isYouTubeUrl((activeChannel as any).streamUrl) ? (
-                                  <Player 
-                                      src={(activeChannel as any).streamUrl}
+                                  <Player
+                                      key={String((activeChannel as any).streamUrl)}
+                                      src={String((activeChannel as any).streamUrl)}
                                       playing={playerPlaying}
-                                      controls={true}
+                                      controls
                                       volume={playerVolume}
                                       muted={playerMuted}
+                                      playsInline
                                       width="100%"
                                       height="100%"
-                                      style={{ position: 'absolute', top: 0, left: 0 }}
-                                      config={{
-                                          file: {
-                                              attributes: {
-                                                  style: {
-                                                      width: '100%',
-                                                      height: '100%',
-                                                      objectFit: aspectMode === 'fill' ? 'fill' : aspectMode === 'cover' ? 'cover' : 'contain'
-                                                  },
-                                                  className: aspectMode === '4-3' ? 'aspect-[4/3] max-w-[75%] mx-auto' : ''
-                                              }
-                                          }
+                                      style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: aspectMode === 'fill' ? 'fill' : aspectMode === 'cover' ? 'cover' : 'contain'
                                       }}
                                       onPlaying={() => {
-                                          setPlayerState('online');
-                                          setApiResponse(prev => ({ ...prev, status: 'online' }));
-                                          addLog('[IPTV] Reproducción iniciada.');
+                                        setPlayerState('online');
+                                        setApiResponse(prev => ({ ...prev, status: 'online', message: 'IPTV: reproducción iniciada' }));
+                                        addLog('[IPTV] Reproducción iniciada.');
                                       }}
                                       onError={(err: any) => {
-                                          console.error("ReactPlayer Error:", err);
-                                          handlePlayerError(err);
+                                        console.error('IPTV playback error:', err);
+                                        setApiResponse(prev => ({
+                                          ...prev,
+                                          status: 'error',
+                                          message: 'No se pudo reproducir la señal. Puede estar caída, bloqueada por CORS, región o HTTPS.',
+                                          streamUrl: String((activeChannel as any).streamUrl)
+                                        }));
+                                        handlePlayerError(err);
                                       }}
-                                  />
-                              ) : (
+                                  />                              ) : (
                                   activeVideoId && (
                                       <iframe 
                                           key={activeVideoId}
