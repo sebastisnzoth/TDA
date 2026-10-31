@@ -869,6 +869,42 @@ export default function App() {
     return channelsList;
   };
 
+  // Ship the user's Argentina playlist with TDA; update existing bundled copy on app release.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/listas/argentina-usuario.m3u')
+      .then(response => {
+        if (!response.ok) throw new Error('Lista local no disponible');
+        return response.text();
+      })
+      .then(text => {
+        if (cancelled) return;
+        const parsed = parseM3u(text);
+        if (parsed.length === 0) return;
+        const bundled: IptvPlaylist = {
+          id: 'tda-argentina-usuario',
+          name: 'Argentina — Lista incorporada',
+          url: '/listas/argentina-usuario.m3u',
+          channelsCount: parsed.length,
+          channels: parsed.map((ch, index) => ({
+            id: `tda-ar-${index}`,
+            name: ch.name,
+            streamUrl: ch.streamUrl,
+            logoUrl: ch.logoUrl,
+            category: 'iptv',
+            group: ch.group
+          }))
+        };
+        setIptvPlaylists(previous => {
+          const updated = [...previous.filter(p => p.id !== bundled.id), bundled];
+          try { localStorage.setItem('tda_iptv_playlists', JSON.stringify(updated)); } catch {}
+          return updated;
+        });
+      })
+      .catch(error => console.warn('[TDA] No se pudo cargar la lista argentina incluida:', error));
+    return () => { cancelled = true; };
+  }, []);
+
   const handleImportIptv = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!iptvName.trim()) {
