@@ -1225,6 +1225,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       'tv-publica': 'Vh8xmLBJtR8',
       'c5n': 'KRezJC7_9Uw',
       'cronica': 'hw4uHyct4vg',
+      'canal26': '9i6d_Z8X0qY',
       'ln-mas': 'hexOV2Z0jvA'
     };
     const normalizedName = channel.name.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -1232,6 +1233,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       : channel.id === 'tv-publica' || /^(tv publica|television publica|tvp(?: argentina)?|television publica argentina)$/.test(normalizedName) || (('streamUrl' in channel) && String((channel as any).streamUrl).includes('Vh8xmLBJtR8')) ? 'tv-publica'
       : channel.id === 'americatv' || /^america(?:\s+(?:tv|television|en vivo))?(?:\s+hd)?$/.test(normalizedName) || (('streamUrl' in channel) && String((channel as any).streamUrl).includes('Q32ajLjh8SU')) ? 'americatv'
       : channel.id === 'c5n' || normalizedName === 'c5n' ? 'c5n'
+      : channel.id === 'canal26' || /^canal\s*26$/.test(normalizedName) || (('streamUrl' in channel) && String((channel as any).streamUrl).includes('9i6d_Z8X0qY')) ? 'canal26'
       : channel.id === 'cronica' || /^cronica(?: tv)?$/.test(normalizedName) ? 'cronica'
       : channel.id === 'ln-mas' || normalizedName === 'ln+' || normalizedName === 'ln mas' ? 'ln-mas'
       : null;
