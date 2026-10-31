@@ -927,6 +927,42 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
+  // Brazil Free-TV: separate imported channel group, loaded from static GitHub Pages assets.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${import.meta.env.BASE_URL}listas/brasil-free-tv.m3u`)
+      .then(response => {
+        if (!response.ok) throw new Error('Lista Brasil no disponible');
+        return response.text();
+      })
+      .then(text => {
+        if (cancelled) return;
+        const parsed = parseM3u(text);
+        if (parsed.length === 0) return;
+        const bundled: IptvPlaylist = {
+          id: 'tda-brasil-free-tv',
+          name: 'Brasil — Free-TV',
+          url: 'listas/brasil-free-tv.m3u',
+          channelsCount: parsed.length,
+          channels: parsed.map((ch, index) => ({
+            id: `tda-br-${index}`,
+            name: ch.name,
+            streamUrl: ch.streamUrl,
+            logoUrl: ch.logoUrl,
+            category: 'iptv',
+            group: ch.group
+          }))
+        };
+        setIptvPlaylists(previous => {
+          const updated = [...previous.filter(p => p.id !== bundled.id), bundled];
+          try { localStorage.setItem('tda_iptv_playlists', JSON.stringify(updated)); } catch {}
+          return updated;
+        });
+      })
+      .catch(error => console.warn('[TDA] No se pudo cargar Free-TV Brasil:', error));
+    return () => { cancelled = true; };
+  }, []);
+
   const handleImportIptv = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!iptvName.trim()) {
