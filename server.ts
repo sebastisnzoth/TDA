@@ -224,32 +224,60 @@ export async function startServer(serverless = false) {
     res.json(Object.keys(CHANNELS));
   });
 
-  // Proxy endpoint to fetch external IPTV .m3u playlists without CORS issues
+  // Public IPTV playlists only. Deny private/reserved networks and unsafe redirects.
   app.get("/api/iptv/proxy", async (req, res) => {
-    const url = req.query.url as string;
-    if (!url) {
-      return res.status(400).json({ error: "Falta parámetro 'url'" });
-    }
+    const requestedUrl = typeof req.query.url === "string" ? req.query.url : "";
+    if (!requestedUrl) return res.status(400).json({ error: "Falta parámetro 'url'" });
     try {
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        },
-        timeout: 10000 // 10s timeout
-      });
-      res.setHeader('Content-Type', 'text/plain');
-      res.send(response.data);
-    } catch (error: any) {
-      console.error(`Error in IPTV proxy for ${url}:`, error.message);
-      
-      let statusCode = 502; // Bad Gateway by default for proxy errors
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        statusCode = 504; // Gateway Timeout
-      } else if (error.response?.status) {
-        statusCode = error.response.status; // Propagate upstream status
+      const dns = await import("node:dns/promises");
+      const net = await import("node:net");
+      const validate = async (raw: string) => {
+        const parsed = new URL(raw);
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new Error("Solo HTTP/HTTPS");
+        if (parsed.username || parsed.password) throw new Error("URL con credenciales no permitida");
+        const hostname = parsed.hostname.toLowerCase().replace(/\\.$/, "");
+        if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname.endsWith(".internal")) throw new Error("Host local no permitido");
+        const addresses = net.isIP(hostname) ? [{ address: hostname }] : await dns.lookup(hostname, { all: true, verbatim: true });
+        if (!addresses.length) throw new Error("Host sin resolución pública");
+        for (const { address } of addresses) {
+          const parts = address.split(".").map(Number);
+          if (net.isIP(address) === 4 && (
+            parts[0] === 0 || parts[0] === 10 || parts[0] === 127 || parts[0] >= 224 ||
+            (parts[0] === 169 && parts[1] === 254) || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+            (parts[0] === 192 && parts[1] === 168) || (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) ||
+            (parts[0] === 192 && parts[1] === 0) || (parts[0] === 198 && (parts[1] === 18 || parts[1] === 19))
+          )) throw new Error("Dirección IP no pública");
+          if (net.isIP(address) === 6 && (
+            address === "::1" || address === "::" || address.toLowerCase().startsWith("fc") ||
+            address.toLowerCase().startsWith("fd") || /^fe[89ab]/i.test(address) || address.toLowerCase().startsWith("::ffff:")
+          )) throw new Error("Dirección IP no pública");
+        }
+        return parsed.toString();
+      };
+      // Only allow maintained public playlist hosts. This also avoids DNS rebinding to private services.
+      const allowedHosts = new Set(["iptv-org.github.io", "raw.githubusercontent.com", "gist.githubusercontent.com"]);
+      let next = requestedUrl;
+      for (let hop = 0; hop < 4; hop++) {
+        const safe = await validate(next);
+        if (!allowedHosts.has(new URL(safe).hostname.toLowerCase())) throw new Error("Fuente IPTV no autorizada para importación por URL; usá la opción Archivo");
+        const upstream = await axios.get(safe, {
+          responseType: "text", timeout: 9000, maxContentLength: 2_000_000,
+          maxRedirects: 0, validateStatus: status => status >= 200 && status < 400
+        });
+        if (upstream.status >= 300) {
+          if (!upstream.headers.location) throw new Error("Redirección sin destino");
+          next = new URL(upstream.headers.location, safe).toString();
+          continue;
+        }
+        const content = String(upstream.data);
+        if (content.length > 2_000_000 || !content.trimStart().startsWith("#EXTM3U")) throw new Error("La respuesta no es una lista M3U válida");
+        res.type("text/plain; charset=utf-8").send(content);
+        return;
       }
-      
-      res.status(statusCode).json({ error: `No se pudo descargar la lista de canales: ${error.message}` });
+      return res.status(502).json({ error: "Demasiadas redirecciones" });
+    } catch (error: any) {
+      console.warn("IPTV import failed:", error?.message);
+      return res.status(422).json({ error: "No se pudo importar la lista: " + (error?.message || "origen no disponible") });
     }
   });
 
