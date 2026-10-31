@@ -20,7 +20,7 @@ const channelCache: Record<string, CacheEntry> = {};
 const CHANNELS: Record<string, string> = {
   // Principales
   "tv-publica": "UC7Z_40wZasf_7_bgnM2vVAg",
-  "eltrece": "UC9Zf_V_itV_4mP_P_K_D_3g",
+  "eltrece": "UC0DM_mHV2u6dj8ig51GkQwg",
   "elnueve": "UCZ496WYLWnyUv2I08vKvxGA",
   "americatv": "UC_83bfeC_zZNSvN287B9xOQ",
   "telefe": "UCzSQKUenBCK-XkU_VldC0BQ", // Generic fallback if needed
@@ -131,11 +131,12 @@ export async function startServer(serverless = false) {
           type: 'video',
           key: apiKey,
           fields: 'items(id/videoId,snippet/title)',
-          maxResults: 1
+          maxResults: 5
         }
       });
 
       const items = response.data.items;
+      // Only YouTube API live search results are eligible; no fabricated fallback IDs.
       
       let resultData;
       if (items && items.length > 0) {
