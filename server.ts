@@ -16,28 +16,6 @@ interface CacheEntry {
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 const channelCache: Record<string, CacheEntry> = {};
 
-// Fallback video IDs for demo purposes when API quota is exceeded or key is invalid
-const FALLBACK_VIDEOS: Record<string, string> = {
-  "tv-publica": "eQhhPVzs6qM", // Reusing a working live for demo if needed
-  "eltrece": "nndzeKDSjuc",
-  "elnueve": "C1DhpJ07ZuE",
-  "americatv": "Vh8xmLBJtR8",
-  "telefe": "5ABLiIbQchA",
-  "tn": "cb12KmMMDJA",
-  "c5n": "xWG-47NFsTg",
-  "ln-mas": "FEWZjXJ7M0c",
-  "a24": "ArKbAx1K-2U",
-  "cronica": "hw4uHyct4vg",
-  "canal26": "cb12KmMMDJA",
-  "ip-noticias": "cb12KmMMDJA",
-  "el-tres-rosario": "cb12KmMMDJA",
-  "el-doce-cordoba": "cb12KmMMDJA",
-  "canal-9-mendoza": "cb12KmMMDJA",
-  "canal-10-cordoba": "cb12KmMMDJA",
-  "chaco-tv": "cb12KmMMDJA",
-  "canal-7-chubut": "cb12KmMMDJA"
-};
-
 // Channel mapping ID -> YouTube Channel ID
 const CHANNELS: Record<string, string> = {
   // Principales
@@ -48,7 +26,7 @@ const CHANNELS: Record<string, string> = {
   "telefe": "UCzSQKUenBCK-XkU_VldC0BQ", // Generic fallback if needed
   
   // Noticias
-  "tn": "UCj6PcyIvBYnX20nJdx9E9GA",
+  "tn": "UCj6PcyLvpnIRT_2W_mwa9Aw",
   "c5n": "UCuY095izSIn7wVbV6vW6u6Q",
   "ln-mas": "UC7w_Z0_XgZf8H_SgRbcHIsA",
   "a24": "UC1E_4gK7_rT_T_8V06qA4bA",
@@ -134,12 +112,13 @@ export async function startServer(serverless = false) {
 
     const apiKey = process.env.YOUTUBE_API_KEY;
     if (!apiKey || apiKey === 'MY_YOUTUBE_API_KEY') {
-      console.warn(`YOUTUBE_API_KEY is not set or invalid. Returning fallback video for ${channelId}.`);
-      const fallbackId = FALLBACK_VIDEOS[channelId];
-      if (fallbackId) {
-        return res.json({ status: "online", videoId: fallbackId, title: "En Vivo (Fallback Mode)" });
-      }
-      return res.json({ status: "error", videoId: null, title: null });
+      return res.status(503).json({
+        status: "unavailable",
+        videoId: null,
+        title: null,
+        error: "YOUTUBE_API_KEY no configurada; no se puede verificar la transmisión en vivo.",
+        channelUrl: `https://www.youtube.com/channel/${ytChannelId}/live`
+      });
     }
 
     try {
@@ -192,13 +171,6 @@ export async function startServer(serverless = false) {
         return res.json(cached.data);
       }
       
-      // Fallback to demo videos if quota is exceeded (403) or bad request (400)
-      if (statusCode === 403 || statusCode === 400) {
-        const fallbackId = FALLBACK_VIDEOS[channelId];
-        if (fallbackId) {
-          return res.json({ status: "online", videoId: fallbackId, title: "En Vivo (Fallback Mode)" });
-        }
-      }
 
       res.json({
         status: 'error',
