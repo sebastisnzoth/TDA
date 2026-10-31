@@ -129,7 +129,7 @@ const CHANNELS_DATA = [
       id: "tn",
       name: "TN (Todo Noticias)",
       category: "noticias",
-      channelId: "UCj6PcyIvBYnX20nJdx9E9GA",
+      channelId: "UCj6PcyLvpnIRT_2W_mwa9Aw",
       online: true,
       logoBg: "bg-slate-950",
       logoHtml: `<div class="flex items-center font-black text-sm italic"><span class="text-blue-500">T</span><span class="text-red-500">N</span></div>`,
