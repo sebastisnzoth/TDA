@@ -725,6 +725,7 @@ export default function App() {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [selectedEpgProgram, setSelectedEpgProgram] = useState<{ channel: any; idx: number } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCountry, setSelectedCountry] = useState<'all' | 'ar' | 'br'>('ar');
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(true);
@@ -1455,6 +1456,17 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       filteredChannels = allChannels.filter(c => c.category === selectedCategory);
   }
 
+  // Separate countries without changing the existing category, search or favorites filters.
+  if (selectedCountry !== 'all') {
+    filteredChannels = filteredChannels.filter(channel => {
+      if (!('streamUrl' in channel)) return selectedCountry === 'ar';
+      const region = String(channel.region || '').toLowerCase();
+      const group = String(('group' in channel ? channel.group : '') || '').toLowerCase();
+      const country = /brasil|brazil|free-tv br/i.test(region + ' ' + group) ? 'br' : 'ar';
+      return country === selectedCountry;
+    });
+  }
+
   // Extra filter for IPTV group
   if (selectedCategory === 'iptv' && selectedIptvGroup !== 'all') {
       filteredChannels = filteredChannels.filter(c => 'group' in c && (c as any).group === selectedIptvGroup);
@@ -1793,6 +1805,30 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                       )}
                   </div>
               </div>
+
+              {/* Country tabs: keep existing category filters underneath. */}
+              <nav aria-label="País de los canales" className="flex items-center gap-2 overflow-x-auto pb-3">
+                {([
+                  { id: 'ar', label: '🇦🇷 Argentina' },
+                  { id: 'br', label: '🇧🇷 Brasil' },
+                  { id: 'all', label: '🌎 Todos los países' }
+                ] as const).map(country => (
+                  <button
+                    key={country.id}
+                    type="button"
+                    onClick={() => { setSelectedCountry(country.id); setSelectedIptvGroup('all'); }}
+                    aria-pressed={selectedCountry === country.id}
+                    className={cn(
+                      "px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors border",
+                      selectedCountry === country.id
+                        ? "bg-sky-600 border-sky-400 text-white"
+                        : "bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800"
+                    )}
+                  >
+                    {country.label}
+                  </button>
+                ))}
+              </nav>
 
               {/* Categories / Navigation Bar */}
               <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-900">
