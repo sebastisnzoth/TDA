@@ -1161,22 +1161,18 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
     setPlayerState('loading');
     setActiveVideoId(null);
 
-    // If it's a custom IPTV channel (possesses a streamUrl directly)
+    // A playlist URL is not proof of an active stream. Wait for actual playback.
     if ('streamUrl' in channel && (channel as any).streamUrl) {
       const streamUrl = (channel as any).streamUrl;
-      addLog(`[IPTV STREAM] Seleccionado canal "${channel.name}". Resolviendo URL de stream...`);
-      setTimeout(() => {
-        setApiResponse({
-          status: "online",
-          streamUrl: streamUrl,
-          title: channel.name,
-          source: `IPTV Playlist: ${channel.region}`,
-          cached: false,
-          serverTime: new Date().toISOString()
-        });
-        setPlayerState('online');
-        addLog(`[SUCCESS] IPTV stream "${channel.name}" cargado de forma interactiva.`);
-      }, 500);
+      addLog(`[IPTV STREAM] Intentando reproducir "${channel.name}"...`);
+      setApiResponse({
+        status: "loading",
+        streamUrl,
+        title: channel.name,
+        source: `IPTV Playlist: ${channel.region}`,
+        cached: false,
+        serverTime: new Date().toISOString()
+      });
       return;
     }
 
@@ -1423,8 +1419,8 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                       </div>
 
                       {/* Live Player Container */}
-                      <div id="player-iframe-container" className={cn("absolute inset-0 w-full h-full transition-opacity duration-300 bg-black", playerState === 'online' ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none')}>
-                          {playerState === 'online' && (
+                      <div id="player-iframe-container" className={cn("absolute inset-0 w-full h-full transition-opacity duration-300 bg-black", (playerState === 'online' || (playerState === 'loading' && activeChannel && 'streamUrl' in activeChannel)) ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none')}>
+                          {(playerState === 'online' || (playerState === 'loading' && activeChannel && 'streamUrl' in activeChannel)) && (
                               activeChannel && 'streamUrl' in activeChannel && (activeChannel as any).streamUrl ? (
                                   <Player 
                                       src={(activeChannel as any).streamUrl}
@@ -1446,6 +1442,11 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                                                   className: aspectMode === '4-3' ? 'aspect-[4/3] max-w-[75%] mx-auto' : ''
                                               }
                                           }
+                                      }}
+                                      onPlaying={() => {
+                                          setPlayerState('online');
+                                          setApiResponse(prev => ({ ...prev, status: 'online' }));
+                                          addLog('[IPTV] Reproducción iniciada.');
                                       }}
                                       onError={(err: any) => {
                                           console.error("ReactPlayer Error:", err);
