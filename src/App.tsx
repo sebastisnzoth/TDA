@@ -1219,12 +1219,14 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
 
     const knownLiveVideos: Record<string, string> = {
       'tn': 'cb12KmMMDJA',
+      'americatv': 'Q32ajLjh8SU',
       'c5n': 'KRezJC7_9Uw',
       'cronica': 'JC7f3EUDaqw',
       'ln-mas': 'hexOV2Z0jvA'
     };
     const normalizedName = channel.name.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const canonicalId = channel.id === 'tn' || /^tn(?: todo noticias| \(todo noticias\))?$/.test(normalizedName) ? 'tn'
+      : channel.id === 'americatv' || /^america(?: tv)?$/.test(normalizedName) ? 'americatv'
       : channel.id === 'c5n' || normalizedName === 'c5n' ? 'c5n'
       : channel.id === 'cronica' || /^cronica(?: tv)?$/.test(normalizedName) ? 'cronica'
       : channel.id === 'ln-mas' || normalizedName === 'ln+' || normalizedName === 'ln mas' ? 'ln-mas'
