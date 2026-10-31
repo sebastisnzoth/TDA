@@ -1258,6 +1258,14 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
     const channel = allChannels.find(c => c.id === channelId);
     if (!channel) return;
 
+    if (/^canal\\s*8\\s*(?:mdq|mar del plata)$/i.test(channel.name.trim())) {
+      setActiveChannelId(channelId);
+      setActiveVideoId(null);
+      setPlayerState('offline');
+      setApiResponse({ status: 'external_only', channelUrl: 'https://mi8.com.ar/en-vivo/', title: 'Canal 8 MDQ — emisión oficial' });
+      return;
+    }
+
     setActiveChannelId(channelId);
     setPlayerState('loading');
     setActiveVideoId(null);
@@ -1660,6 +1668,15 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                           )}
                       </div>
 
+                      {activeChannel && /^canal\\s*8\\s*(?:mdq|mar del plata)$/i.test(activeChannel.name.trim()) && (
+                        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950 p-5">
+                          <div className="text-center space-y-4">
+                            <p className="text-white font-bold">Canal 8 MDQ — Mar del Plata</p>
+                            <p className="text-slate-300 text-sm">No hay una señal HLS verificable para reproducir aquí.</p>
+                            <a href="https://mi8.com.ar/en-vivo/" target="_blank" rel="noopener noreferrer" className="inline-block px-5 py-3 rounded-xl bg-sky-600 text-white font-semibold">Ver transmisión en el sitio oficial ↗</a>
+                          </div>
+                        </div>
+                      )}
                       {/* Loading Spinner */}
                       <div className={cn("absolute inset-0 bg-slate-950 flex flex-col items-center justify-center z-30", playerState === 'loading' && !(activeChannel && 'streamUrl' in activeChannel) ? 'flex' : 'hidden')}>
                           <div className="relative w-12 h-12">
