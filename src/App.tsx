@@ -6,6 +6,26 @@ import ReactPlayer from 'react-player';
 
 const Player = ReactPlayer as any;
 
+const getYouTubeVideoId = (url: string): string | null => {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    let id: string | null = null;
+    if (host === 'youtu.be' || host === 'www.youtu.be') id = parsed.pathname.slice(1).split('/')[0];
+    else if (host === 'youtube.com' || host === 'www.youtube.com' || host === 'm.youtube.com') {
+      if (parsed.pathname === '/watch') id = parsed.searchParams.get('v');
+      else if (parsed.pathname.startsWith('/live/') || parsed.pathname.startsWith('/embed/')) id = parsed.pathname.split('/')[2];
+    }
+    return id && /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
+  } catch { return null; }
+};
+const isYouTubeUrl = (url: string): boolean => {
+  try { return /^(www\\.|m\\.)?(youtube\\.com|youtu\\.be)$/.test(new URL(url).hostname.toLowerCase()); }
+  catch { return false; }
+};
+
+
+
 // Patch HTMLMediaElement.prototype.play to handle interruption / AbortError gracefully
 if (typeof window !== 'undefined' && window.HTMLMediaElement) {
   const originalPlay = window.HTMLMediaElement.prototype.play;
@@ -1197,6 +1217,22 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
     setPlayerState('loading');
     setActiveVideoId(null);
 
+    // YouTube channel pages cannot be embedded as video frames without an actual live video ID.
+    // Only individual YouTube videos may be embedded; otherwise link to the broadcaster's official page.
+    if ('streamUrl' in channel && (channel as any).streamUrl && isYouTubeUrl((channel as any).streamUrl)) {
+      const youtubeUrl = (channel as any).streamUrl as string;
+      const id = getYouTubeVideoId(youtubeUrl);
+      setApiResponse({ status: id ? 'video_detected' : 'external_only', title: channel.name, source: youtubeUrl });
+      if (id) {
+        setActiveVideoId(id);
+        setPlayerState('online');
+      } else {
+        setPlayerState('offline');
+        addLog(`[YOUTUBE] La URL de "${channel.name}" es una página, no un video insertable; usar enlace oficial.`);
+      }
+      return;
+    }
+
     // A playlist URL is not proof of an active stream. Wait for actual playback.
     if ('streamUrl' in channel && (channel as any).streamUrl) {
       const streamUrl = (channel as any).streamUrl;
@@ -1457,7 +1493,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                       {/* Live Player Container */}
                       <div id="player-iframe-container" className={cn("absolute inset-0 w-full h-full transition-opacity duration-300 bg-black", (playerState === 'online' || (playerState === 'loading' && activeChannel && 'streamUrl' in activeChannel)) ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none')}>
                           {(playerState === 'online' || (playerState === 'loading' && activeChannel && 'streamUrl' in activeChannel)) && (
-                              activeChannel && 'streamUrl' in activeChannel && (activeChannel as any).streamUrl ? (
+                              activeChannel && 'streamUrl' in activeChannel && (activeChannel as any).streamUrl && !isYouTubeUrl((activeChannel as any).streamUrl) ? (
                                   <Player 
                                       src={(activeChannel as any).streamUrl}
                                       playing={playerPlaying}
@@ -1493,7 +1529,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                                   activeVideoId && (
                                       <iframe 
                                           key={activeVideoId}
-                                          src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&rel=0&showinfo=0`}
+                                          src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&playsinline=1&rel=0`}
                                           className="w-full h-full absolute top-0 left-0"
                                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                           allowFullScreen
