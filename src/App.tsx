@@ -1469,7 +1469,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                       </div>
 
                       {/* Loading Spinner */}
-                      <div className={cn("absolute inset-0 bg-slate-950 flex flex-col items-center justify-center z-30", playerState === 'loading' ? 'flex' : 'hidden')}>
+                      <div className={cn("absolute inset-0 bg-slate-950 flex flex-col items-center justify-center z-30", playerState === 'loading' && !(activeChannel && 'streamUrl' in activeChannel) ? 'flex' : 'hidden')}>
                           <div className="relative w-12 h-12">
                               <div className="absolute inset-0 rounded-full border-4 border-slate-800"></div>
                               <div className="absolute inset-0 rounded-full border-4 border-t-sky-500 animate-spin"></div>
