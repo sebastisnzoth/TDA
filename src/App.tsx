@@ -20,8 +20,10 @@ const getYouTubeVideoId = (url: string): string | null => {
   } catch { return null; }
 };
 const isYouTubeUrl = (url: string): boolean => {
-  try { return /^(www\\.|m\\.)?(youtube\\.com|youtu\\.be)$/.test(new URL(url).hostname.toLowerCase()); }
-  catch { return false; }
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be', 'www.youtu.be'].includes(host);
+  } catch { return false; }
 };
 
 
