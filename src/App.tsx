@@ -1427,7 +1427,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                           {playerState === 'online' && (
                               activeChannel && 'streamUrl' in activeChannel && (activeChannel as any).streamUrl ? (
                                   <Player 
-                                      url={(activeChannel as any).streamUrl}
+                                      src={(activeChannel as any).streamUrl}
                                       playing={playerPlaying}
                                       controls={true}
                                       volume={playerVolume}
