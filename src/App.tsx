@@ -1222,12 +1222,14 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
     const knownLiveVideos: Record<string, string> = {
       'tn': 'cb12KmMMDJA',
       'americatv': 'Q32ajLjh8SU',
+      'tv-publica': 'Vh8xmLBJtR8',
       'c5n': 'KRezJC7_9Uw',
       'cronica': 'JC7f3EUDaqw',
       'ln-mas': 'hexOV2Z0jvA'
     };
     const normalizedName = channel.name.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const canonicalId = channel.id === 'tn' || /^tn(?: todo noticias| \(todo noticias\))?$/.test(normalizedName) ? 'tn'
+      : channel.id === 'tv-publica' || /^(tv publica|television publica|tvp(?: argentina)?|television publica argentina)$/.test(normalizedName) || (('streamUrl' in channel) && String((channel as any).streamUrl).includes('Vh8xmLBJtR8')) ? 'tv-publica'
       : channel.id === 'americatv' || /^america(?:\s+(?:tv|television|en vivo))?(?:\s+hd)?$/.test(normalizedName) || (('streamUrl' in channel) && String((channel as any).streamUrl).includes('Q32ajLjh8SU')) ? 'americatv'
       : channel.id === 'c5n' || normalizedName === 'c5n' ? 'c5n'
       : channel.id === 'cronica' || /^cronica(?: tv)?$/.test(normalizedName) ? 'cronica'
