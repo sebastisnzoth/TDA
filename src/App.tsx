@@ -1575,10 +1575,11 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                                   activeVideoId && (
                                       <iframe 
                                           key={activeVideoId}
-                                          src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&playsinline=1&rel=0`}
+                                          src={activeVideoId === "Q32ajLjh8SU" ? "https://www.youtube.com/embed/Q32ajLjh8SU?si=7WQTJ2eyIzr2syx3&autoplay=1&playsinline=1" : `https://www.youtube.com/embed/${activeVideoId}?autoplay=1&playsinline=1&rel=0`}
                                           className="w-full h-full absolute top-0 left-0"
-                                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                           allowFullScreen
+                                          referrerPolicy="strict-origin-when-cross-origin"
                                           title="Reproductor de TV en Vivo"
                                       ></iframe>
                                   )
