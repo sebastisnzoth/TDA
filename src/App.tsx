@@ -764,7 +764,7 @@ export default function App() {
   const [selectedCountry, setSelectedCountry] = useState<'home' | 'all' | 'ar' | 'br'>('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(true);
+  
   
   // Player state
   const [playerState, setPlayerState] = useState<'idle' | 'loading' | 'online' | 'offline' | 'error'>('idle');
@@ -1599,14 +1599,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                       <i className="fa-solid fa-sparkles"></i>
                       <span>Guía IA</span>
                   </button>
-                  <button onClick={() => {setIsDevConsoleOpen(!isDevConsoleOpen); showToast("Consola de simulación conmutada");}} className="relative flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-semibold text-sky-400 border border-sky-500/20 transition-all shadow-md active:scale-95 whitespace-nowrap">
-                      <i className="fa-solid fa-code"></i>
-                      <span>Simulador Backend</span>
-                      <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                      </span>
-                  </button>
+
               </div>
           </div>
       </header>
@@ -2210,63 +2203,6 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                   </div>
               </div>
 
-          </div>
-
-          {/* Right Column: API Simulator & Controller (30%) */}
-          <div className={cn("w-full lg:w-1/3 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-fit lg:sticky lg:top-20 transition-all duration-300", isDevConsoleOpen ? "block" : "hidden lg:flex")}>
-              
-              {/* Header of Simulator */}
-              <div className="bg-slate-950 p-4 border-b border-slate-800 flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                      <span className="text-xs font-extrabold text-slate-300 tracking-wider uppercase">SIMULADOR BACKEND NODE.JS</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                      <button onClick={clearServerCache} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] font-semibold text-slate-300 rounded transition-colors" title="Vaciar caché en memoria">
-                          <i className="fa-solid fa-trash-can mr-1"></i>Vaciar Caché
-                      </button>
-                      <button onClick={() => setIsDevConsoleOpen(false)} className="lg:hidden text-slate-400 hover:text-white px-1">
-                          <i className="fa-solid fa-times"></i>
-                      </button>
-                  </div>
-              </div>
-
-              {/* Server Performance Indicator Bar */}
-              <div className="bg-slate-900 p-3 border-b border-slate-800 flex justify-between text-[11px] font-mono text-slate-400">
-                  <div>Status: <span className="text-emerald-400 font-bold">EXPRESS_OK (3000)</span></div>
-                  <div>Caché: <span className="text-sky-400 font-bold">{ratio}%</span> (Ratio)</div>
-              </div>
-
-              {/* Channel Status Switches Controller */}
-              <div className="p-4 border-b border-slate-800">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">Controlador de Señal (API Switches)</h4>
-                  <p className="text-[10px] text-slate-500 mb-3 leading-relaxed">Podes "apagar" o "encender" la señal de los canales para testear el sistema de control de fallos y de respuesta Offline de tu App móvil.</p>
-                  
-                  <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                      {channels.map(channel => (
-                          <div key={channel.id} className="flex items-center justify-between p-2 bg-slate-950 rounded-lg border border-slate-800/60">
-                              <div className="flex items-center gap-2 min-w-0">
-                                  <span className={cn("w-2 h-2 rounded-full", channel.online ? 'bg-emerald-500' : 'bg-rose-500')}></span>
-                                  <span className="text-[11px] font-bold text-slate-300 truncate">{channel.name}</span>
-                              </div>
-                              <label className="relative inline-flex items-center cursor-pointer">
-                                  <input type="checkbox" checked={channel.online} onChange={() => toggleChannelSignal(channel.id)} className="sr-only peer" />
-                                  <div className="w-7 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
-                              </label>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-
-              {/* Live JSON Response Inspector */}
-              <div className="p-4 bg-slate-950 flex-grow">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Respuesta JSON de la API</span>
-                  <div className="bg-slate-900/50 rounded-lg border border-slate-800 p-3 h-36 overflow-y-auto">
-                      <pre className="font-mono text-[10px] text-sky-400 whitespace-pre-wrap">
-                          {JSON.stringify(apiResponse, null, 2)}
-                      </pre>
-                  </div>
-              </div>
           </div>
 
       </main>
