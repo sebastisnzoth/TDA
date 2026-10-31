@@ -53,3 +53,5 @@ https://www.youtube.com/c/IPNoticiasEnVivo/live
 https://www.youtube.com/channel/UC6YundoLrEuBJaPp_oEPWaA/live
 #EXTINF:-1 group-title="Argentina - Free-TV (enlace externo)",Comarca TV
 https://www.youtube.com/c/ComarcaTV/live
+#EXTINF:-1 tvg-id="Canal8MardelPlata.ar" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/e/e5/Canal_8_Mar_del_Plata_%28Logo_2022_-_2%29.png" group-title="Argentina - Mar del Plata",Canal 8 MDQ
+https://stream.arcast.com.ar/c8mdp/ngrp:c8mdp_all/playlist.m3u8
