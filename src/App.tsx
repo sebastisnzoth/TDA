@@ -81,7 +81,7 @@ const CHANNELS_DATA = [
       id: "eltrece",
       name: "El Trece",
       category: "aire",
-      channelId: "UC9Zf_V_itV_4mP_P_K_D_3g",
+      channelId: "UC0DM_mHV2u6dj8ig51GkQwg",
       online: true,
       logoBg: "bg-slate-950",
       logoHtml: `<div class="relative w-7 h-7 flex items-center justify-center bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 rounded-full"><div class="w-3 h-3 bg-slate-950 rounded-full"></div></div>`,
