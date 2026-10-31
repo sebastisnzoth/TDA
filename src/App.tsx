@@ -1099,6 +1099,12 @@ export default function App() {
 
   const PRESET_LISTS = [
     {
+      name: "Brasil — Catálogo IPTV-org",
+      url: "https://iptv-org.github.io/iptv/countries/br.m3u",
+      desc: "Señales brasileñas comunitarias. Algunas pueden requerir permisos regionales o no reproducirse en el navegador.",
+      badge: "Brasil"
+    },
+    {
       name: "Argentina — Canales públicos",
       url: "https://iptv-org.github.io/iptv/countries/ar.m3u",
       desc: "Catálogo comunitario de transmisiones abiertas de Argentina. La disponibilidad depende de cada canal.",
@@ -1150,7 +1156,7 @@ export default function App() {
     
     try {
       addLog(`[IPTV PRESET] Descargando desde ${url}...`);
-      const res = await axios.get(`/api/iptv/proxy?url=${encodeURIComponent(url.trim())}`);
+      const res = await axios.get(url.trim(), { timeout: 15000, responseType: 'text' });
       const m3uText = res.data;
       
       const parsedChannels = parseM3u(m3uText);
