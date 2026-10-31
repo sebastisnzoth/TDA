@@ -892,7 +892,7 @@ export default function App() {
   // Ship the user's Argentina playlist with TDA; update existing bundled copy on app release.
   useEffect(() => {
     let cancelled = false;
-    fetch('/listas/argentina-usuario.m3u')
+    fetch(`${import.meta.env.BASE_URL}listas/argentina-usuario.m3u`)
       .then(response => {
         if (!response.ok) throw new Error('Lista local no disponible');
         return response.text();
@@ -938,7 +938,7 @@ export default function App() {
     try {
       if (iptvUrl.trim()) {
         addLog(`[IPTV IMPORT] Descargando lista desde ${iptvUrl}...`);
-        const res = await axios.get(`/api/iptv/proxy?url=${encodeURIComponent(iptvUrl.trim())}`);
+        const res = await axios.get(iptvUrl.trim());
         m3uText = res.data;
       } else if (iptvRawText.trim()) {
         addLog(`[IPTV IMPORT] Procesando texto raw de M3U pasteado...`);
@@ -1248,6 +1248,13 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       return;
     }
 
+    if (import.meta.env.PROD && import.meta.env.BASE_URL !== '/') {
+      setPlayerState('offline');
+      setApiResponse({ status: 'external_only', channelUrl: channel.channelId ? `https://www.youtube.com/channel/${channel.channelId}/live` : null });
+      addLog(`[GITHUB PAGES] El canal ${channel.name} requiere resolver su video en vivo desde YouTube; abrilo en el sitio oficial.`);
+      return;
+    }
+
     setApiRequestsCount(c => c + 1);
     addLog(`GET /api/canales/${channel.id}${forceRefresh ? '?refresh=true' : ''} - Petición HTTP recibida.`);
 
@@ -1483,6 +1490,13 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                                      className="mt-3 inline-flex rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500">
                                     Abrir transmisión en YouTube
                                   </a>
+                              )}
+                              {activeChannel && !('streamUrl' in activeChannel) && activeChannel.channelId && (
+                                 <a href={`https://www.youtube.com/channel/${activeChannel.channelId}/live`}
+                                    target="_blank" rel="noopener noreferrer"
+                                    className="mt-3 inline-flex rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500">
+                                   Ver canal oficial en YouTube
+                                 </a>
                               )}
                               {activeChannel && (
                                   <div className="mt-4 flex flex-wrap gap-2 justify-center">
