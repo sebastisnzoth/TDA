@@ -1226,7 +1226,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
     };
     const normalizedName = channel.name.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const canonicalId = channel.id === 'tn' || /^tn(?: todo noticias| \(todo noticias\))?$/.test(normalizedName) ? 'tn'
-      : channel.id === 'americatv' || /^america(?: tv)?$/.test(normalizedName) ? 'americatv'
+      : channel.id === 'americatv' || /^america(?:\s+(?:tv|television|en vivo))?(?:\s+hd)?$/.test(normalizedName) || (('streamUrl' in channel) && String((channel as any).streamUrl).includes('Q32ajLjh8SU')) ? 'americatv'
       : channel.id === 'c5n' || normalizedName === 'c5n' ? 'c5n'
       : channel.id === 'cronica' || /^cronica(?: tv)?$/.test(normalizedName) ? 'cronica'
       : channel.id === 'ln-mas' || normalizedName === 'ln+' || normalizedName === 'ln mas' ? 'ln-mas'
