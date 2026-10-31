@@ -113,7 +113,7 @@ const CHANNELS_DATA = [
   },
   {
       id: "elnueve",
-      name: "El Nueve",
+      name: "Canal 9 Argentina (El Nueve)",
       category: "aire",
       channelId: "UCZ496WYLWnyUv2I08vKvxGA",
       online: true,
