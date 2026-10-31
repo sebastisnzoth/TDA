@@ -1224,7 +1224,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       'americatv': 'Q32ajLjh8SU',
       'tv-publica': 'Vh8xmLBJtR8',
       'c5n': 'KRezJC7_9Uw',
-      'cronica': 'JC7f3EUDaqw',
+      'cronica': 'hw4uHyct4vg',
       'ln-mas': 'hexOV2Z0jvA'
     };
     const normalizedName = channel.name.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
