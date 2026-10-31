@@ -1,0 +1,17 @@
+#EXTM3U
+#EXTINF:-1 group-title="Brasil - Free-TV",COM Brasil
+https://br5093.streamingdevideo.com.br/abc/abc/playlist.m3u8
+#EXTINF:-1 group-title="Brasil - Free-TV",SBT
+https://www.youtube.com/watch?v=ABVQXgr2LW4
+#EXTINF:-1 group-title="Brasil - Free-TV",RBC
+https://www.youtube.com/watch?v=oUdd3CsxYaE
+#EXTINF:-1 group-title="Brasil - Free-TV",Record News
+https://rnw-rn.otteravision.com/rnw/rn/rnw_rn.m3u8
+#EXTINF:-1 group-title="Brasil - Free-TV",ISTV
+https://video08.logicahost.com.br/istvnacional/srt.stream/istvnacional.m3u8
+#EXTINF:-1 group-title="Brasil - Free-TV",Rede Brasil
+https://video09.logicahost.com.br/redebrasiloficial/redebrasiloficial/playlist.m3u8
+#EXTINF:-1 group-title="Brasil - Free-TV",TV Câmara
+https://stream3.camara.gov.br/tv1/manifest.m3u8
+#EXTINF:-1 group-title="Brasil - Free-TV",TV Cultura
+https://player-tvcultura.stream.uol.com.br/live/tvcultura.m3u8
