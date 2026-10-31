@@ -1279,10 +1279,12 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       'canal26': '9i6d_Z8X0qY',
       'ln-mas': 'hexOV2Z0jvA',
       'el-doce-cordoba': 'nndzeKDSjuc',
-      'eltrece': 'nndzeKDSjuc'
+      'eltrece': 'nndzeKDSjuc',
+      'elnueve': 'yGLVhAklLyM'
     };
     const normalizedName = channel.name.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const canonicalId = channel.id === 'eltrece' || /^el trece$/.test(normalizedName) ? 'eltrece'
+    const canonicalId = channel.id === 'elnueve' || /^(el nueve|canal 9(?: argentina)?)$/.test(normalizedName) ? 'elnueve'
+      : channel.id === 'eltrece' || /^el trece$/.test(normalizedName) ? 'eltrece'
       : channel.id === 'el-doce-cordoba' || /^el doce(?: cordoba| argentina)?$/.test(normalizedName) ? 'el-doce-cordoba'
       : channel.id === 'tn' || /^tn(?: todo noticias| \(todo noticias\))?$/.test(normalizedName) ? 'tn'
       : channel.id === 'tv-publica' || /^(tv publica|television publica|tvp(?: argentina)?|television publica argentina)$/.test(normalizedName) || (('streamUrl' in channel) && String((channel as any).streamUrl).includes('Vh8xmLBJtR8')) ? 'tv-publica'
