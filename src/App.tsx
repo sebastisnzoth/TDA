@@ -1475,8 +1475,15 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                               <p className="text-sm text-slate-400 mt-1 max-w-sm">
                                   {activeChannel 
                                       ? (playerState === 'error' ? "El video no está disponible (puede requerir reproducirse en YouTube o fue eliminado)." : `${activeChannel.name} se encuentra fuera de transmisión o su reproductor requiere validación de región.`) 
-                                      : "Elegí cualquier señal de la grilla inferior para iniciar la simulación de streaming en vivo."}
+                                      : "Elegí un canal de la grilla inferior para comprobar su señal."}
                               </p>
+                              {activeChannel && 'streamUrl' in activeChannel && isYouTubeUrl(String((activeChannel as any).streamUrl)) && (
+                                  <a href={String((activeChannel as any).streamUrl)}
+                                     target="_blank" rel="noopener noreferrer"
+                                     className="mt-3 inline-flex rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500">
+                                    Abrir transmisión en YouTube
+                                  </a>
+                              )}
                               {activeChannel && (
                                   <div className="mt-4 flex flex-wrap gap-2 justify-center">
                                       <button onClick={() => selectChannel(activeChannel.id)} className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold transition-all shadow-md inline-flex items-center gap-2">
