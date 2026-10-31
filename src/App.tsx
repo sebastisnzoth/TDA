@@ -721,6 +721,42 @@ function EpgProgramDetailModal({ isOpen, onClose, channel, idx, onPlayChannel }:
 }
 
 export default function App() {
+  const [tvMode, setTvMode] = useState(() => new URLSearchParams(window.location.search).get('tv') === '1');
+  useEffect(() => {
+    if (!tvMode) return;
+    const onRemoteKey = (event: KeyboardEvent) => {
+      const key = event.key;
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace'].includes(key)) return;
+      const active = document.activeElement as HTMLElement | null;
+      if (active && /INPUT|TEXTAREA|SELECT/.test(active.tagName)) return;
+      if (key === 'Escape' || key === 'Backspace') {
+        event.preventDefault();
+        (document.querySelector('[data-tv-home="true"]') as HTMLElement | null)?.focus();
+        return;
+      }
+      const focusables = Array.from(document.querySelectorAll<HTMLElement>('[data-tv-focus="true"]:not([disabled])'));
+      if (!focusables.length) return;
+      if (key === 'Enter') { if (active?.matches('[data-tv-focus="true"]')) active.click(); return; }
+      event.preventDefault();
+      const currentIndex = Math.max(0, focusables.indexOf(active as HTMLElement));
+      const current = focusables[currentIndex].getBoundingClientRect();
+      const direction = { ArrowUp: [0,-1], ArrowDown: [0,1], ArrowLeft: [-1,0], ArrowRight: [1,0] }[key] || [0,0];
+      const candidates = focusables.map((element, index) => {
+        const rect = element.getBoundingClientRect();
+        const dx = (rect.left + rect.width/2) - (current.left + current.width/2);
+        const dy = (rect.top + rect.height/2) - (current.top + current.height/2);
+        const primary = direction[0] ? dx * direction[0] : dy * direction[1];
+        const lateral = direction[0] ? Math.abs(dy) : Math.abs(dx);
+        return { element, index, score: primary + lateral * 2, primary };
+      }).filter(item => item.index !== currentIndex && item.primary > 5).sort((a,b)=>a.score-b.score);
+      const next = candidates[0]?.element;
+      if (next) { next.focus(); next.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+    };
+    document.addEventListener('keydown', onRemoteKey);
+    const first = document.querySelector<HTMLElement>('[data-tv-home="true"]');
+    first?.focus();
+    return () => document.removeEventListener('keydown', onRemoteKey);
+  }, [tvMode]);
   const [channels, setChannels] = useState(CHANNELS_DATA);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [selectedEpgProgram, setSelectedEpgProgram] = useState<{ channel: any; idx: number } | null>(null);
@@ -1511,7 +1547,25 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
   const ratio = apiRequestsCount > 0 ? Math.round((cacheHitsCount / apiRequestsCount) * 1000)/10 : 100;
 
   return (
-    <>
+    <div className={tvMode ? 'tda-tv-mode min-h-screen' : ''}>
+      {tvMode && <style>{`
+        .tda-tv-mode { font-size: 120%; }
+        .tda-tv-mode button, .tda-tv-mode a { min-height: 48px; }
+        .tda-tv-mode [data-tv-focus="true"]:focus { outline: 4px solid #38bdf8 !important; outline-offset: 4px; transform: scale(1.03); z-index: 30; }
+        .tda-tv-mode .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        @media (max-width: 900px) { .tda-tv-mode .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      `}</style>}
+      <div className="fixed bottom-4 right-4 z-50">
+        <button type="button" data-tv-focus="true" onClick={() => {
+          const next = !tvMode;
+          setTvMode(next);
+          const url = new URL(window.location.href);
+          if (next) url.searchParams.set('tv','1'); else url.searchParams.delete('tv');
+          window.history.replaceState(null, '', url.toString());
+        }} className="bg-sky-700 border border-sky-400 text-white font-bold px-5 py-3 rounded-xl shadow-2xl">
+          {tvMode ? 'Salir modo TV' : 'Modo Smart TV'}
+        </button>
+      </div>
       {/* Header */}
       <header className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 px-4 py-3">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -2083,7 +2137,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                               const isActive = activeChannelId === channel.id;
                               
                               return (
-                                  <div key={channel.id} onClick={() => selectChannel(channel.id)} className={cn("bg-slate-900 border rounded-xl p-3 cursor-pointer transition-all duration-200 relative group", isActive ? "border-sky-500 shadow-sky-500/10 shadow-lg scale-[1.02]" : "border-slate-800/80 hover:border-slate-700 hover:scale-[1.01]")}>
+                                  <div key={channel.id} role="button" tabIndex={0} data-tv-focus="true" onKeyDown={(event) => { if (event.key === "Enter") selectChannel(channel.id); }} onClick={() => selectChannel(channel.id)} className={cn("bg-slate-900 border rounded-xl p-3 cursor-pointer transition-all duration-200 relative group", isActive ? "border-sky-500 shadow-sky-500/10 shadow-lg scale-[1.02]" : "border-slate-800/80 hover:border-slate-700 hover:scale-[1.01]")}>
                                       <div className="flex items-start justify-between mb-2">
                                           <div className={`w-10 h-10 rounded-lg ${channel.logoBg} text-slate-100 flex items-center justify-center p-1.5 shadow-inner`} dangerouslySetInnerHTML={{ __html: channel.logoHtml }} />
                                           <div className="flex items-center gap-1">
@@ -2589,6 +2643,6 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
               <i className="fa-solid fa-circle-info text-sky-500"></i> {toastMessage}
           </div>
       )}
-    </>
+    </div>
   );
 }
