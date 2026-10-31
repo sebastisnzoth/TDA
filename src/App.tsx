@@ -1217,12 +1217,24 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
     setPlayerState('loading');
     setActiveVideoId(null);
 
-    if (channel.id === 'tn' || (channel.category === 'iptv' && /^(tn|tn todo noticias|tn \(todo noticias\))$/i.test(channel.name.trim()))) {
-      const videoId = 'cb12KmMMDJA';
+    const knownLiveVideos: Record<string, string> = {
+      'tn': 'cb12KmMMDJA',
+      'c5n': 'KRezJC7_9Uw',
+      'cronica': 'JC7f3EUDaqw',
+      'ln-mas': 'hexOV2Z0jvA'
+    };
+    const normalizedName = channel.name.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const canonicalId = channel.id === 'tn' || /^tn(?: todo noticias| \(todo noticias\))?$/.test(normalizedName) ? 'tn'
+      : channel.id === 'c5n' || normalizedName === 'c5n' ? 'c5n'
+      : channel.id === 'cronica' || /^cronica(?: tv)?$/.test(normalizedName) ? 'cronica'
+      : channel.id === 'ln-mas' || normalizedName === 'ln+' || normalizedName === 'ln mas' ? 'ln-mas'
+      : null;
+    if (canonicalId && knownLiveVideos[canonicalId]) {
+      const videoId = knownLiveVideos[canonicalId];
       setActiveVideoId(videoId);
-      setApiResponse({ status: 'video_detected', videoId, title: 'TN en vivo — fuente facilitada por el usuario', embedUrl: `https://www.youtube.com/embed/${videoId}` });
+      setApiResponse({ status: 'video_detected', videoId, title: `${channel.name} — video de YouTube identificado`, embedUrl: `https://www.youtube.com/embed/${videoId}` });
       setPlayerState('online');
-      addLog('[YOUTUBE] Cargando video oficial de TN proporcionado por el usuario.');
+      addLog('[YOUTUBE] Cargando emisión de YouTube identificada.');
       return;
     }
 
