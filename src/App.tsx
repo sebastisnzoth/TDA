@@ -1217,10 +1217,10 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
     setPlayerState('loading');
     setActiveVideoId(null);
 
-    if (channel.id === 'tn') {
+    if (channel.id === 'tn' || (channel.category === 'iptv' && /^(tn|tn todo noticias|tn \(todo noticias\))$/i.test(channel.name.trim()))) {
       const videoId = 'cb12KmMMDJA';
       setActiveVideoId(videoId);
-      setApiResponse({ status: 'video_detected', videoId, title: 'TN en vivo — fuente facilitada por el usuario' });
+      setApiResponse({ status: 'video_detected', videoId, title: 'TN en vivo — fuente facilitada por el usuario', embedUrl: `https://www.youtube.com/embed/${videoId}` });
       setPlayerState('online');
       addLog('[YOUTUBE] Cargando video oficial de TN proporcionado por el usuario.');
       return;
