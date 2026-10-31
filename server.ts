@@ -13,7 +13,32 @@ interface CacheEntry {
   timestamp: number;
 }
 
-const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION_MS = 5 * 60 * 1000;
+// Expected broadcaster names: verify every configured YouTube channel before advertising a live signal.
+// A verified channel lookup is cached, and unknown/mismatched channels remain unavailable.
+const CHANNEL_NAMES: Record<string, string[]> = {
+  "tv-publica": ["tv pública", "televisión pública", "tv publica"],
+  "eltrece": ["eltrece", "el trece"],
+  "elnueve": ["elnueve", "el nueve", "canal 9"],
+  "americatv": ["américa tv", "america tv", "america televisión"],
+  "telefe": ["telefe"],
+  "tn": ["tn", "todo noticias"],
+  "c5n": ["c5n"],
+  "ln-mas": ["la nacion", "la nación", "ln+", "ln mas"],
+  "a24": ["a24", "américa 24", "america 24"],
+  "cronica": ["crónica", "cronica"],
+  "canal26": ["canal 26", "canal26"],
+  "ip-noticias": ["ip noticias", "argentina 12"],
+  "el-tres-rosario": ["el tres", "canal 3 rosario"],
+  "el-doce-cordoba": ["el doce", "canal 12 córdoba", "eldoce"],
+  "canal-9-mendoza": ["canal 9 mendoza", "nueve mendoza", "televida"],
+  "canal-10-cordoba": ["canal 10", "cba24n", "universidad nacional de córdoba"],
+  "chaco-tv": ["chaco tv", "chaco televisión"],
+  "canal-7-chubut": ["canal 7 chubut", "chubut tv"]
+};
+const verifiedChannelCache = new Map<string, { ok: boolean; at: number }>();
+const normalized = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+ // 5 minutes
 const channelCache: Record<string, CacheEntry> = {};
 
 // Channel mapping ID -> YouTube Channel ID
@@ -122,6 +147,19 @@ export async function startServer(serverless = false) {
     }
 
     try {
+      const check = verifiedChannelCache.get(channelId);
+      if (!check || now - check.at > CACHE_DURATION_MS) {
+        const channelInfo = await axios.get("https://www.googleapis.com/youtube/v3/channels", {
+          params: { part: "snippet", id: ytChannelId, key: apiKey, fields: "items(snippet/title)" },
+          timeout: 8000
+        });
+        const actualName = normalized(channelInfo.data.items?.[0]?.snippet?.title || "");
+        const ok = Boolean(actualName && CHANNEL_NAMES[channelId]?.some(name => actualName.includes(normalized(name))));
+        verifiedChannelCache.set(channelId, { ok, at: now });
+      }
+      if (!verifiedChannelCache.get(channelId)?.ok) {
+        return res.json({ status: "offline", videoId: null, title: null, reason: "El identificador de YouTube no corresponde a un canal verificado." });
+      }
       // Search for active live streams on the channel
       const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
         params: {
