@@ -725,7 +725,7 @@ export default function App() {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [selectedEpgProgram, setSelectedEpgProgram] = useState<{ channel: any; idx: number } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedCountry, setSelectedCountry] = useState<'all' | 'ar' | 'br'>('ar');
+  const [selectedCountry, setSelectedCountry] = useState<'home' | 'all' | 'ar' | 'br'>('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(true);
@@ -1456,8 +1456,14 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       filteredChannels = allChannels.filter(c => c.category === selectedCategory);
   }
 
+  // Home only shows a small curated group, never the entire IPTV directory.
+  if (selectedCountry === 'home' && !searchQuery.trim()) {
+    const featuredIds = new Set(['tn', 'tv-publica', 'americatv', 'c5n', 'cronica', 'canal26', 'ln-mas', 'eltrece', 'elnueve']);
+    filteredChannels = filteredChannels.filter(channel => featuredIds.has(channel.id));
+  }
+
   // Separate countries without changing the existing category, search or favorites filters.
-  if (selectedCountry !== 'all') {
+  if (selectedCountry !== 'all' && selectedCountry !== 'home') {
     filteredChannels = filteredChannels.filter(channel => {
       if (!('streamUrl' in channel)) return selectedCountry === 'ar';
       const region = String(channel.region || '').toLowerCase();
@@ -1809,6 +1815,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
               {/* Country tabs: keep existing category filters underneath. */}
               <nav aria-label="País de los canales" className="flex items-center gap-2 overflow-x-auto pb-3">
                 {([
+                  { id: 'home', label: '🏠 Inicio' },
                   { id: 'ar', label: '🇦🇷 Argentina' },
                   { id: 'br', label: '🇧🇷 Brasil' },
                   { id: 'all', label: '🌎 Todos los países' }
@@ -2041,7 +2048,7 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
                   
                   {filteredChannels.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                          {filteredChannels.map(channel => {
+                          {filteredChannels.slice(0, selectedCountry === 'home' && !searchQuery.trim() ? 9 : filteredChannels.length).map(channel => {
                               const isFav = favorites.includes(channel.id);
                               const isActive = activeChannelId === channel.id;
                               
