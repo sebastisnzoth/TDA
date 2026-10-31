@@ -1468,8 +1468,15 @@ https://playertest.longtailvideo.com/adaptive/bipbop/bipbop.m3u8`);
       if (!('streamUrl' in channel)) return selectedCountry === 'ar';
       const region = String(channel.region || '').toLowerCase();
       const group = String(('group' in channel ? channel.group : '') || '').toLowerCase();
-      const country = /brasil|brazil|free-tv br/i.test(region + ' ' + group) ? 'br' : 'ar';
-      return country === selectedCountry;
+      const metadata = region + ' ' + group;
+      // Imported playlists without trustworthy country metadata must not be labeled Argentine.
+      // Never guess Argentina merely because a channel is not from Brazil.
+      const explicitlyBrazilian = /\\b(brasil|brazil|brasileir[oa]|br\\s*-\\s*free-tv)\\b/i.test(metadata);
+      const explicitlyArgentine = /\\b(argentina|argentine|argentino|argentina\\s*-|\\bar\\s*-\\s*iptv)\\b/i.test(metadata);
+      const foreign = /\\b(china|chinese|chino|chinos|chines|hong\\s*kong|taiwan|japan|jap[oó]n|corea|korea|uruguay|chile|mexico|méxico|españa|spain|usa|united states)\\b/i.test(channel.name + ' ' + metadata) || /[\\u3400-\\u9fff]/u.test(channel.name);
+      if (selectedCountry === 'ar') return explicitlyArgentine && !explicitlyBrazilian && !foreign;
+      if (selectedCountry === 'br') return explicitlyBrazilian && !foreign;
+      return false;
     });
   }
 
